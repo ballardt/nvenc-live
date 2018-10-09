@@ -1,5 +1,20 @@
 \section{Introduction}
+The introduction of hardware HEVC encoders to consumer-grade GPUs has opened the door to mass 360-degree and 4K video livestreaming, but does not immediately offer a solution to adaptive video streaming. Recently, a significant body of work on tile-based adaptive streaming for 360-degree and 4K video has appeared, in which the quality requested for each section of a video corresponds to how interesting it is, allowing clients to view the most important parts of a video, or, e.g., those which a user is moving their head towards, in high-quality without stalling. This is straightforward for pre-rendered video, but is more complicated in a livestreaming scenario because each quality requires another encode, necessarily introducing some delay in the availability of a new segment. Furthermore, tiling, which must occur within the HEVC encoder prior to generation of the bitstream, is not supported by existing hardware encoders. One can try to get around this by feeding each tile to the encoder as a separate video, but even top-of-the-line consumer-grade GPUs only support two contiguous encoding processing, forcing the user to either encode their whole video at two different qualities, or divide their video into two tiles but only offer a single quality for either tile. In the former case, tiling does not occur; in the latter, the tile sizes are so large as to render the point moot, and the video stream is not adaptive because only one quality is available for either half.
 
-\section{Details}
+We introduce WORKINGTITLE, a GPU-based HEVC encoding pipeline to tile, encode, and stitch video at multiple qualities in real-time on a frame-by-frame basis. WORKINGTITLE uses HEVC slices in conjunction with tiles to encode each region of a video independently, so that a player can pick and choose which quality they want for each region. To do so, the source video stream is divided into vertical strips, which are stacked on top of one another. This restructured video image is fed to the encoder with slice boundaries specified to at least be the edges of these strips, so that each slice is some fraction of the horizontal width and, possibly, vertical height. This process occurs twice for each frame, resulting in high-quality and low-quality outputs. When the video is reconstructed during playback, each slice is an independently-decodable region of video, so we are free to pick and choose either quality for each region of the video shown to the user.
+
+The rest of this paper is organized as follows: ...
+
+\section{HEVC and NVENC}
+Here we will give a background on the relevent components of the HEVC encoding pipeline: tiles and slices. Also explain the basics of NVENC.
+
+\section{WORKINGTITLE Implementation}
+Explain how the source image is reconfigured prior to encoding, what parameters we give to NVENC, and how the bitstream is stitched back together. 
+
+\section{Installing and Using WORKINGTITLE}
+Configuring and using the software.
+
+\section{Evaluation}
+Not sure what to evaluate yet. Maybe switch this section for something similar to Evaluation, but not quite, since we are introducing something new rather than an improvement over a problem with existing solutions.
 
 \section{Conclusion}
