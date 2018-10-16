@@ -36,14 +36,34 @@ def checkNALType(stream):
         nalType = 'PS'
     return nalType
 
+def consumeNALRemainder(stream, nalString):
+    # Now get the rest
+    # First, get byte-aligned (in the original stream, NOT nalString)
+    numToRead = (8 - (stream.pos % 8)) if (stream.pos % 8 != 0) else 0
+    nalString += stream.read('bits:{}'.format(numToRead)).bin
+    # Go through the bytes, keeping an eye out for emulation_prevention_three_bytes
+    while stream.pos < stream.len:
+        if ((stream.len - stream.pos) < 8):
+            numToRead = (8 - (stream.pos % 8)) if (stream.pos % 8 != 0) else 0
+            s = stream.read('bits:{}'.format(numToRead)).bin
+        else:
+            s = stream.read('bits:8').bin
+            if s == '00000011':
+                # emulation_prevention_three_byte must be byte-aligned
+                numToRead = (8 - (len(nalString) % 8)) if (len(nalString) % 8 != 0) else 0
+                nalString += stream.read('bits:{}'.format(numToRead)).bin
+        nalString += s
+
+    # Byte-align by appending 0s
+    numZeros = (8 - (len(nalString) % 8)) if (len(nalString) % 8 != 0) else 0
+    nalString += '0' * numZeros
+    return nalString
+
 def modifySPS(stream, width=3840, height=2048):
-    s = stream.read('hex')
-    print(' '.join([s[i:i+2] for i in range(0, len(s), 2)]))
-    stream.pos = 0
+    #s = stream.read('hex')
+    #print(' '.join([s[i:i+2] for i in range(0, len(s), 2)]))
+    #stream.pos = 0
     spsString = ''
-    #spsString = '0b'
-    #print(stream.hex)
-    #print(stream.bin)
     # We have to edit pic_width_in_luma_samples and pic_height_in_luma_samples
     # First, we have to advance to them.
     # Consume border (0x000001 -> 4*6 = 24 bits)
@@ -65,117 +85,17 @@ def modifySPS(stream, width=3840, height=2048):
     spsString += bs.Bits(ue=stream.read('ue')).bin
     spsString += bs.Bits(ue=stream.read('ue')).bin
     # Now consume the width and height fields and replace them with our own
-    # TODO when the bit size of the new size does not match that of the old, we get some
-    # very bizarre corruption beginning way down at vui_num_units_in_tick
     stream.read('ue')
     stream.read('ue')
-    #spsString += bs.Bits(ue=1280).bin
-    #spsString += bs.Bits(ue=640).bin
     spsString += bs.Bits(ue=width).bin
     spsString += bs.Bits(ue=height).bin
-    #### Now consume the rest
-    ####conformance_window_flag (assume 0)
-    ###spsString += stream.read('bits:1').bin
-    #### bit_depth_{luma, chroma}_minus8 (assume 0, 0)
-    ###spsString += bs.Bits(ue=stream.read('ue')).bin
-    ###spsString += bs.Bits(ue=stream.read('ue')).bin
-    #### log2_max_pic_order_cnt_lsb_minus4 (assume 4)
-    ###spsString += bs.Bits(ue=stream.read('ue')).bin
-    #### sps_* stuff
-    ###spsString += stream.read('bits:1').bin
-    ###spsString += bs.Bits(ue=stream.read('ue')).bin
-    ###spsString += bs.Bits(ue=stream.read('ue')).bin
-    ###spsString += bs.Bits(ue=stream.read('ue')).bin
-    #### log2_* stuff
-    ###spsString += bs.Bits(ue=stream.read('ue')).bin
-    ###spsString += bs.Bits(ue=stream.read('ue')).bin
-    ###spsString += bs.Bits(ue=stream.read('ue')).bin
-    ###spsString += bs.Bits(ue=stream.read('ue')).bin
-    #### max_transform_hierarchy_depth_{inter, intra}
-    ###spsString += bs.Bits(ue=stream.read('ue')).bin
-    ###spsString += bs.Bits(ue=stream.read('ue')).bin
-    #### scaling list, amp, sao, pcm flags (assuming 0, 1, 1, 0)
-    ###spsString += stream.read('bits:4').bin
-    #### num_short_term_ref_pic_sets (assuming 1)
-    ###spsString += bs.Bits(ue=stream.read('ue')).bin
-    #### st_ref_pic_set
-    ###spsString += bs.Bits(ue=stream.read('ue')).bin
-    ###spsString += bs.Bits(ue=stream.read('ue')).bin
-    ###spsString += bs.Bits(ue=stream.read('ue')).bin # delta_poc_s0
-    ###spsString += stream.read('bits:1').bin
-    #### long, sps_temporal, strong_intra, vui_params flags (assuming 0, 0, 0, 1)
-    ###spsString += stream.read('bits:4').bin
-    #### VUI parameters
-    #### aspect_ratio_*
-    ###spsString += stream.read('bits:1').bin
-    ###spsString += stream.read('bits:8').bin
-    #### overscan
-    ###spsString += stream.read('bits:1').bin
-    #### video_signal_type. u(1, 3, 1, 1)
-    ###spsString += stream.read('bits:6').bin
-    #### chroma to vui_timing_info_present flags
-    ###spsString += stream.read('bits:6').bin
-    #### vui_num_units_in_tick
-    ###print('Discarding vui_num_units_in_tick: {}'.format(stream.read('bits:32').bin))
-    ###spsString += '00000000000000000000001111101000'
-    #### vui_time_scale
-    ###print('Discarding vui_time_scale: {}'.format(stream.read('bits:32').bin))
-    ###spsString += '00000000000000000110000110101000'
-    #### Manually add the rest
-    #### TODO Automate this. The vui_* stuff above is so weird and throw everything else off.
-    #### vui_* flags
-    ###spsString += '01'
-    #### hrd_parameters
-    #### commonInfPresentFlag
-    ###spsString += '100'+'0000'+'0000'+'10111'+'01111'+'00101'
-    ####for w/ maxNumSubLayersMinus1
-    ###spsString += '000'
-    ###spsString += bs.Bits(ue=0).bin
-    #### sub_layer_hrd_parameters
-    ###spsString += bs.Bits(ue=93749).bin
-    ###spsString += bs.Bits(ue=249999).bin
-    ###spsString += '0'
-    #### Last 2 flags
-    ###spsString += '00'
-    ####spsString += stream.read('bits:{}'.format(stream.len-stream.pos)).bin
-    ####spsString += '0' * (8 - (len(spsString) % 8))
 
-    # First, get byte-aligned (in the original stream, NOT spsString)
-    numToRead = (8 - (stream.pos % 8)) if (stream.pos % 8 != 0) else 0
-    spsString += stream.read('bits:{}'.format(numToRead)).bin
-    # Now go through the bytes, keeping an eye out for emulation_prevention_three_bytes
-    #streamBytes = stream.read('bits').bin
-    #n = 8 # 8 bits per byte
-    #streamBytes = [streamBytes[i:i+n] for i in range(0, len(streamBytes), n)]
-    #zeroCounter = 0
-
-    while stream.pos < stream.len:
-        if ((stream.len - stream.pos) < 8):
-            numToRead = (8 - (stream.pos % 8)) if (stream.pos % 8 != 0) else 0
-            s = stream.read('bits:{}'.format(numToRead)).bin
-        else:
-            s = stream.read('bits:8').bin
-            if s == '00000011':
-                # emulation_prevention_three_byte must be byte-aligned
-                numToRead = (8 - (len(spsString) % 8)) if (len(spsString) % 8 != 0) else 0
-                spsString += stream.read('bits:{}'.format(numToRead)).bin
-        spsString += s
-
-    # Get the remainder, keeping an eye out for emulation_prevention_three_bytes
-    #import re
-    #pattern = re.compile(r'000000000000000000000011')
-    #origStream = stream.read('bits').bin
-    #for s in re.findall(pattern, origStream):
-    #    print('Found one')
-    
-    #spsString += '00' # align for hex
-    numZeros = (8 - (len(spsString) % 8)) if (len(spsString) % 8 != 0) else 0
-    spsString += '0' * numZeros
-    # Now make it readable
+    # Now get the rest
+    spsString = consumeNALRemainder(stream, spsString)
     spsString = '0b' + spsString
-    spsHex = bs.Bits(spsString).hex
-    print(' '.join([spsHex[i:i+2] for i in range(0, len(spsHex), 2)]))
-    print()
+    #spsHex = bs.Bits(spsString).hex
+    #print(' '.join([spsHex[i:i+2] for i in range(0, len(spsHex), 2)]))
+    #print()
     return bs.Bits(spsString), (width, height)
 
 
