@@ -100,7 +100,7 @@ def modifySPS(stream, width=3840, height=2048):
 
 
 def modifyPPS(stream, num_tile_rows=3, num_tile_cols=3):
-    ppsString = '0b'
+    ppsString = ''
     # Have to flip tiles_enabled_flag then insert some related fields
     # First consume up to tiles_enabled_flag
     # TODO assuming cu_qp_delta_enabled_flag is 1
@@ -116,8 +116,13 @@ def modifyPPS(stream, num_tile_rows=3, num_tile_cols=3):
     ppsString += bs.Bits(ue=stream.read('ue')).bin
     ppsString += bs.Bits(ue=stream.read('ue')).bin
     ppsString += bs.Bits(ue=stream.read('se')).bin
-    ppsString += stream.read('bits:3').bin
-    ppsString += bs.Bits(ue=stream.read('ue')).bin
+    ppsString += stream.read('bits:1').bin
+    # Set transform_skip_enabled_flag and cu_qp_delta_enabled_flag to 0
+    stream.read('bits:2')
+    ppsString += '00'
+    #ppsString += bs.Bits(ue=stream.read('ue')).bin
+    # Discard the diff_cu_qp_delta_depth since we don't need it
+    stream.read('ue')
     ppsString += bs.Bits(ue=stream.read('se')).bin
     ppsString += bs.Bits(ue=stream.read('se')).bin
     ppsString += stream.read('bits:4').bin
@@ -132,14 +137,20 @@ def modifyPPS(stream, num_tile_rows=3, num_tile_cols=3):
     ppsString += bs.Bits(ue=num_tile_rows-1).bin
     # uniform_spacing_flag and loop_filter_across_tiles_enabled_flag
     ppsString += '10'
+    # pps_loop_filter_across_slices_enabled_flag
+    stream.read('bits:1')
+    ppsString += '0'
     # Now copy over the rest of the bits
-    ppsString += stream.read('bits:{}'.format(stream.len-stream.pos)).bin
-    ppsString += '0' * (8 - (len(ppsString) % 8))
+    ppsString = consumeNALRemainder(stream, ppsString)
+    ppsString = '0b' + ppsString
+    print(ppsString)
+    #ppsString += stream.read('bits:{}'.format(stream.len-stream.pos)).bin
+    #ppsString += '0' * (8 - (len(ppsString) % 8))
     return bs.Bits(ppsString)
 
 def modifyIFrame(stream, isFirst, segmentAddress, ctuOffsetBitSize):
     #print(stream.len)
-    iString = '0b'
+    iString = ''
     # Have to flip first_slice_segment_in_pic_flag if not the first tile, and insert
     # slice_segment_address
     # Consume border (0x000001 -> 4*6 = 24 bits)01011101
@@ -175,12 +186,14 @@ def modifyIFrame(stream, isFirst, segmentAddress, ctuOffsetBitSize):
     iString += '1'
     # Copy the rest of the I frame
     #print(iString)
-    iString += stream.read('bits:{}'.format(stream.len-stream.pos)).bin
-    iString += '0' * (8 - (len(iString) % 8))
+    iString = consumeNALRemainder(stream, iString)
+    iString = '0b' + iString
+    #iString += stream.read('bits:{}'.format(stream.len-stream.pos)).bin
+    #iString += '0' * (8 - (len(iString) % 8))
     return bs.Bits(iString)
 
 def modifyPFrame(stream, isFirst, segmentAddress, ctuOffsetBitSize):
-    pString = '0b'
+    pString = ''
     # Have to flip first_slice_segment_in_pic_flag if not the first tile, insert
     # slice_segment_address, and insert num_entry_point_offsets
     # Consume border (0x000001 -> 4*6 = 24 bits)01011101
@@ -197,7 +210,8 @@ def modifyPFrame(stream, isFirst, segmentAddress, ctuOffsetBitSize):
     # TODO assuming dependent_slice_segments_enabled_flag == 0
     pString += bs.Bits(ue=stream.read('ue')).bin
     # Insert slice_segment_address
-    pString += bs.Bits(uint=segmentAddress, length=ctuOffsetBitSize).bin
+    if not isFirst:
+        pString += bs.Bits(uint=segmentAddress, length=ctuOffsetBitSize).bin
     # Navigate to num_entrypoint_offsets
     pString += bs.Bits(ue=stream.read('ue')).bin # slice_type
     pString += stream.read('bits:8').bin # slice_pic_order_cnt_lsb (TODO assuming log2_max_pic_order_cnt... == 4)
@@ -214,8 +228,10 @@ def modifyPFrame(stream, isFirst, segmentAddress, ctuOffsetBitSize):
     stream.read('bits:1')
     pString += '1'
     # Copy the rest of the P frame
-    pString += stream.read('bits:{}'.format(stream.len-stream.pos)).bin
-    pString += '0' * (8 - (len(pString) % 8))
+    pString = consumeNALRemainder(stream, pString)
+    pString = '0b' + pString
+    #pString += stream.read('bits:{}'.format(stream.len-stream.pos)).bin
+    #pString += '0' * (8 - (len(pString) % 8))
     return bs.Bits(pString)
 
 if __name__=='__main__':
@@ -263,7 +279,6 @@ if __name__=='__main__':
                 elif nalType == 'P_frame':
                     print('P frame')
                     modifyPFrame(nal, i==0, tileCTUOffsets[i], ctuOffsetBitSize).tofile(f)
-                    #nal.tofile(f)
                 elif nalType == 'SEI':
                     if i == 0:
                         print('SEI')
