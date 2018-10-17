@@ -7,6 +7,14 @@ import bitstring as bs
 import math
 
 CTU_SIZE = 32
+OUTPUT_WIDTH = 3840
+OUTPUT_HEIGHT = 1472
+
+OUTPUT_WIDTH /= 3
+OUTPUT_HEIGHT *= 3
+
+OUTPUT_WIDTH = int(OUTPUT_WIDTH)
+OUTPUT_HEIGHT = int(OUTPUT_HEIGHT)
 
 def getNAL(stream):
     nalString = '0x'
@@ -36,30 +44,52 @@ def checkNALType(stream):
         nalType = 'PS'
     return nalType
 
-def consumeNALRemainder(stream, nalString):
+def consumeNALRemainder(stream, nalString, doEmulationPrevention=False):
     # Now get the rest
     # First, get byte-aligned (in the original stream, NOT nalString)
     numToRead = (8 - (stream.pos % 8)) if (stream.pos % 8 != 0) else 0
     nalString += stream.read('bits:{}'.format(numToRead)).bin
     # Go through the bytes, keeping an eye out for emulation_prevention_three_bytes
+    zeroCounter = 0
     while stream.pos < stream.len:
         if ((stream.len - stream.pos) < 8):
             numToRead = (8 - (stream.pos % 8)) if (stream.pos % 8 != 0) else 0
             s = stream.read('bits:{}'.format(numToRead)).bin
+            nalString += s
         else:
             s = stream.read('bits:8').bin
-            if s == '00000011':
-                # emulation_prevention_three_byte must be byte-aligned
+            # emulation_prevention_three_byte must be byte-aligned
+            if doEmulationPrevention and s == '00000011':
                 numToRead = (8 - (len(nalString) % 8)) if (len(nalString) % 8 != 0) else 0
                 nalString += stream.read('bits:{}'.format(numToRead)).bin
-        nalString += s
+                nalString += s
+            elif doEmulationPrevention and s == '00000000':
+                zeroCounter += 1
+                if zeroCounter == 2:
+                    numToRead = (8 - (len(nalString) % 8)) if (len(nalString) % 8 != 0) else 0
+                    nalString += stream.read('bits:{}'.format(numToRead)).bin
+                    nalString += s
+                    nalString += '00000011'
+                    zeroCounter = 0
+                else:
+                    nalString += s
+            else:
+                nalString += s
 
-    # Byte-align by appending 0s
+    # Remove the previous byte alignment
+    nalString = nalString[:nalString.rfind('1')]
+    # Byte-align by appending a 1 and then 0s
+    nalString += '1'
     numZeros = (8 - (len(nalString) % 8)) if (len(nalString) % 8 != 0) else 0
     nalString += '0' * numZeros
+    # Remove the previous byte alignment
+    ##stream.read('bits:1')
+    ##numZeros = (8 - (stream.pos % 8)) if (stream.pos % 8 != 0) else 0
+    ##stream.read('bits:{}'.format(numZeros))
+
     return nalString
 
-def modifySPS(stream, width=3840, height=1472):
+def modifySPS(stream, width=OUTPUT_WIDTH, height=OUTPUT_HEIGHT):
     #s = stream.read('hex')
     #print(' '.join([s[i:i+2] for i in range(0, len(s), 2)]))
     #stream.pos = 0
@@ -99,7 +129,7 @@ def modifySPS(stream, width=3840, height=1472):
     return bs.Bits(spsString), (width, height)
 
 
-def modifyPPS(stream, num_tile_rows=1, num_tile_cols=2):
+def modifyPPS(stream, num_tile_rows=3, num_tile_cols=1):
     ppsString = ''
     # Have to flip tiles_enabled_flag then insert some related fields
     # First consume up to tiles_enabled_flag
@@ -118,11 +148,14 @@ def modifyPPS(stream, num_tile_rows=1, num_tile_cols=2):
     ppsString += bs.Bits(ue=stream.read('se')).bin
     ppsString += stream.read('bits:1').bin
     # Set transform_skip_enabled_flag and cu_qp_delta_enabled_flag to 0
-    stream.read('bits:2')
-    ppsString += '00'
-    #ppsString += bs.Bits(ue=stream.read('ue')).bin
+    # TODO really need?
+    #stream.read('bits:2')
+    #ppsString += '00'
+    ppsString += stream.read('bits:2').bin
     # Discard the diff_cu_qp_delta_depth since we don't need it
-    stream.read('ue')
+    #stream.read('ue')
+    # EDIT: do not discard, it's below
+    ppsString += bs.Bits(ue=stream.read('ue')).bin
     ppsString += bs.Bits(ue=stream.read('se')).bin
     ppsString += bs.Bits(ue=stream.read('se')).bin
     ppsString += stream.read('bits:4').bin
@@ -138,12 +171,12 @@ def modifyPPS(stream, num_tile_rows=1, num_tile_cols=2):
     # uniform_spacing_flag and loop_filter_across_tiles_enabled_flag
     ppsString += '10'
     # pps_loop_filter_across_slices_enabled_flag
-    stream.read('bits:1')
-    ppsString += '0'
+    #stream.read('bits:1')
+    #ppsString += '0'
+    ppsString += stream.read('bits:1').bin
     # Now copy over the rest of the bits
     ppsString = consumeNALRemainder(stream, ppsString)
     ppsString = '0b' + ppsString
-    print(ppsString)
     #ppsString += stream.read('bits:{}'.format(stream.len-stream.pos)).bin
     #ppsString += '0' * (8 - (len(ppsString) % 8))
     return bs.Bits(ppsString)
@@ -161,9 +194,8 @@ def modifyIFrame(stream, isFirst, segmentAddress, ctuOffsetBitSize):
     # First data bit is first_slice_segment_in_pic_flag
     # Don't need to flip because it'll already be like that
     #stream.read('bits:1')
-    #iString += '1' if isFirst else '0'
+    #iString += '1' if isFirst else '0' iString += stream.read('bits:1').bin
     iString += stream.read('bits:1').bin
-    ########### GOOD ###########
     # Navigate to slice_segment_address insertion spot
     # u(1), ue(v)
     # TODO assuming we don't output no_output_of_prior_pics_flag
@@ -172,21 +204,32 @@ def modifyIFrame(stream, isFirst, segmentAddress, ctuOffsetBitSize):
     iString += bs.Bits(ue=stream.read('ue')).bin
     # Modify slice_segment_address
     if not isFirst:
-        stream.read('bits:{}'.format(ctuOffsetBitSize))
-        iString += bs.Bits(uint=segmentAddress, length=ctuOffsetBitSize).bin
+        iString += stream.read('bits:{}'.format(ctuOffsetBitSize)).bin
+        #stream.read('bits:{}'.format(ctuOffsetBitSize))
+        #iString += bs.Bits(uint=segmentAddress, length=ctuOffsetBitSize).bin
     # Navigate to num_entrypoint_offsets
     # u(0), ue(v), u(1), u(1), se(v)
     # TODO making a ton of assumptions here
     iString += bs.Bits(ue=stream.read('ue')).bin
     iString += stream.read('bits:2').bin
     iString += bs.Bits(se=stream.read('se')).bin
-    iString += stream.read('bits:1').bin
+    # slice_loop_filter_across...
+    stream.read('bits:1')
+    iString += '0'
     # Insert num_entry_point_offsets (Exp-Golomb)
     # TODO make sure 0 is always ok
     iString += '1'
+    # byte_align() the header
+    iString += '1'
+    numZeros = (8 - (len(iString) % 8)) if (len(iString) % 8 != 0) else 0
+    iString += '0' * numZeros
+    # Remove the previous byte alignment
+    stream.read('bits:1')
+    numZeros = (8 - (stream.pos % 8)) if (stream.pos % 8 != 0) else 0
+    stream.read('bits:{}'.format(numZeros))
     # Copy the rest of the I frame
     #print(iString)
-    iString = consumeNALRemainder(stream, iString)
+    iString = consumeNALRemainder(stream, iString, False)
     iString = '0b' + iString
     #iString += stream.read('bits:{}'.format(stream.len-stream.pos)).bin
     #iString += '0' * (8 - (len(iString) % 8))
@@ -213,8 +256,9 @@ def modifyPFrame(stream, isFirst, segmentAddress, ctuOffsetBitSize):
     pString += bs.Bits(ue=stream.read('ue')).bin
     # Insert slice_segment_address
     if not isFirst:
-        stream.read('bits:{}'.format(ctuOffsetBitSize))
-        pString += bs.Bits(uint=segmentAddress, length=ctuOffsetBitSize).bin
+        pString += stream.read('bits:{}'.format(ctuOffsetBitSize)).bin
+        #stream.read('bits:{}'.format(ctuOffsetBitSize))
+        #pString += bs.Bits(uint=segmentAddress, length=ctuOffsetBitSize).bin
     # Navigate to num_entrypoint_offsets
     pString += bs.Bits(ue=stream.read('ue')).bin # slice_type
     pString += stream.read('bits:8').bin # slice_pic_order_cnt_lsb (TODO assuming log2_max_pic_order_cnt... == 4)
@@ -225,13 +269,22 @@ def modifyPFrame(stream, isFirst, segmentAddress, ctuOffsetBitSize):
     pString += stream.read('bits:1').bin # cabac_init_flag
     pString += bs.Bits(ue=stream.read('ue')).bin # five_minus_max_num_...
     pString += bs.Bits(se=stream.read('se')).bin # slice_qp_delta
-    pString += stream.read('bits:1').bin # slice_loop_filter_across_...
+    #pString += stream.read('bits:1').bin # slice_loop_filter_across_...
+    stream.read('bits:1')
+    pString += '0'
     # Insert num_entry_point_offsets (Exp-Golomb)
     # TODO make sure 0 is always ok
-    stream.read('bits:1')
     pString += '1'
+    # byte_align() the header
+    pString += '1'
+    numZeros = (8 - (len(pString) % 8)) if (len(pString) % 8 != 0) else 0
+    pString += '0' * numZeros
+    # Remove the previous byte_alignment()
+    stream.read('bits:1')
+    numZeros = (8 - (stream.pos % 8)) if (stream.pos % 8 != 0) else 0
+    stream.read('bits:{}'.format(numZeros))
     # Copy the rest of the P frame
-    pString = consumeNALRemainder(stream, pString)
+    pString = consumeNALRemainder(stream, pString, False)
     pString = '0b' + pString
     #pString += stream.read('bits:{}'.format(stream.len-stream.pos)).bin
     #pString += '0' * (8 - (len(pString) % 8))
@@ -249,7 +302,7 @@ if __name__=='__main__':
         # VPS
         getNAL(files[0]).tofile(f)
         # SPS
-        sps, tileSizes[0] = modifySPS(getNAL(files[0]), 3840, 2048)
+        sps, tileSizes[0] = modifySPS(getNAL(files[0]), OUTPUT_WIDTH, OUTPUT_HEIGHT)
         sps.tofile(f)
         # PPS
         modifyPPS(getNAL(files[0])).tofile(f)
@@ -267,8 +320,9 @@ if __name__=='__main__':
         # TODO hardcoded; instead infer
         # TODO currently assumes a 1x3 layout. Can probably automate by finding most equal factor
         # pair for a given number of tiles
-        tileCTUOffsets = [0, 120, 240]
-        ctuOffsetBitSize = math.ceil(math.log((3840/CTU_SIZE)*(1472/CTU_SIZE), 2))
+        #tileCTUOffsets = [0, 120, 240]
+        tileCTUOffsets = [0, 1840, 3680]
+        ctuOffsetBitSize = math.ceil(math.log((OUTPUT_WIDTH/CTU_SIZE)*(OUTPUT_HEIGHT/CTU_SIZE), 2))
 
         # Now do I and P frames until the end
         i = 0
