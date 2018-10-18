@@ -14,20 +14,18 @@ OUTPUT_HEIGHT = 1472
 def getNAL(stream, nalNum):
     #nalString = '0x'
     startIdx = stream.pos
-    nalBits = bs.BitStream()
     borders = list(itertools.islice(stream.findall('0x000001', bytealigned=True), nalNum, nalNum+2))
     stream.pos = startIdx
     # Go past the first border, including it in the NAL
-    nalBits.append(stream.read('bits:{}'.format((borders[0]-startIdx)+24)))
+    #nalBits.append(stream.read('bits:{}'.format((borders[0]-startIdx)+24)))
+    nalBits = stream.read('bits:{}'.format(borders[1]-stream.pos))
     #while stream.peek('hex:24') != '000001':
     #    #nalString += stream.read('hex:8')
     #    nalBits.append(stream.read('hex:8'))
     ##nalString += stream.read('hex:24')
     #nalBits.append(stream.read('hex:24'))
     # Now go until the next border, leaving it for the next NAL
-    print(borders)
-    print(stream.pos)
-    nalBits.append(stream.read('bits:{}'.format(borders[1]-stream.pos)))
+    #nalBits.append(stream.read('bits:{}'.format(borders[1]-stream.pos)))
     #while stream.peek('hex:24') != '000001':
     #    #nalString += stream.read('hex:8')
     #    nalBits.append(stream.read('hex:8'))
@@ -81,7 +79,7 @@ def consumeNALRemainder(stream, nalString, doEmulationPrevention=True):
                         chunk = nalString[idx:idx+16]
                         if chunk == '0000000000000000':
                             nalString = nalString[:idx+16] + '00000011' + nalString[idx+16:]
-                            print(nalString)
+                            #print(nalString)
 
     # Remove the previous byte alignment
     nalString = nalString[:nalString.rfind('1')]
@@ -247,9 +245,11 @@ if __name__=='__main__':
             for i in range(NUM_FILES)
         ]
         borders = [list(bitstr.findall('0x000001', bytealigned=True)) for bitstr in files]
-        print(borders)
+        files[0].pos = 0
+        files[1].pos = 0
         # We only need PS info from one tile in the output stream header
         # VPS
+        #files[0].read('bits:{}'.format(borders[0][1])).tofile(f)
         getNAL(files[0], 0).tofile(f)
         # SPS
         print('SPS')
