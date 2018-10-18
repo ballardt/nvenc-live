@@ -7,8 +7,8 @@ CTU_SIZE = 32
 OUTPUT_WIDTH = 3840
 OUTPUT_HEIGHT = 1472
 
-OUTPUT_WIDTH = int(OUTPUT_WIDTH/3)
-OUTPUT_HEIGHT = int(OUTPUT_HEIGHT*3)
+#OUTPUT_WIDTH = int(OUTPUT_WIDTH/3)
+#OUTPUT_HEIGHT = int(OUTPUT_HEIGHT*3)
 
 def getNAL(stream):
     nalString = '0x'
@@ -110,7 +110,7 @@ def modifySPS(stream, width=OUTPUT_WIDTH, height=OUTPUT_HEIGHT):
 # Modify the PPS as follows:
 # - set tiles_enabled_flag = 1
 # - insert the 4 tile-related fields
-def modifyPPS(stream, num_tile_rows=3, num_tile_cols=1):
+def modifyPPS(stream, num_tile_rows=1, num_tile_cols=3):
     ppsString = ''
     # Consume border
     ppsString += stream.read('bits:24').bin
@@ -158,7 +158,8 @@ def modifyIFrame(stream, isFirst, segmentAddress, ctuOffsetBitSize):
     iString += stream.read('bits:1').bin
     iString += bs.Bits(ue=stream.read('ue')).bin
     if not isFirst:
-        iString += stream.read('bits:{}'.format(ctuOffsetBitSize)).bin
+        stream.read('bits:{}'.format(ctuOffsetBitSize))
+        iString += bs.Bits(uint=segmentAddress, length=ctuOffsetBitSize).bin
     iString += bs.Bits(ue=stream.read('ue')).bin
     iString += stream.read('bits:2').bin
     iString += bs.Bits(se=stream.read('se')).bin
@@ -193,7 +194,8 @@ def modifyPFrame(stream, isFirst, segmentAddress, ctuOffsetBitSize):
     pString += stream.read('bits:1').bin
     pString += bs.Bits(ue=stream.read('ue')).bin
     if not isFirst:
-        pString += stream.read('bits:{}'.format(ctuOffsetBitSize)).bin
+        stream.read('bits:{}'.format(ctuOffsetBitSize))
+        pString += bs.Bits(uint=segmentAddress, length=ctuOffsetBitSize).bin
     pString += bs.Bits(ue=stream.read('ue')).bin # slice_type
     pString += stream.read('bits:8').bin # slice_pic_order_cnt_lsb
     pString += stream.read('bits:1').bin # short_term_ref_... assuming 0
@@ -222,12 +224,15 @@ def modifyPFrame(stream, isFirst, segmentAddress, ctuOffsetBitSize):
     return bs.Bits(pString)
 
 if __name__=='__main__':
-    NUM_FILES = 1
+    NUM_FILES = 2
     NUM_SLICES = 3
     tileSizes = [-1 for _ in range(NUM_FILES)]
     with open('/home/trevor/Projects/hevc/videos/stitched.hevc', 'wb') as f:
         # Open each file
-        files = [bs.BitStream(filename='/home/trevor/Projects/hevc/videos/ms9390_{}.hevc'.format(i)) for i in range(NUM_FILES)]
+        files = [
+            bs.BitStream(filename='/home/trevor/Projects/hevc/videos/ms9390_{}.hevc'.format(i))
+            for i in range(NUM_FILES)
+        ]
         # We only need PS info from one tile in the output stream header
         # VPS
         getNAL(files[0]).tofile(f)
@@ -238,10 +243,16 @@ if __name__=='__main__':
         modifyPPS(getNAL(files[0])).tofile(f)
         # SEI
         getNAL(files[0]).tofile(f)
+        # Advance the other file, since we don't use its PS
+        getNAL(files[1])
+        getNAL(files[1])
+        getNAL(files[1])
+        getNAL(files[1])
         # Slice segment addresses
-        tileCTUOffsets = [0, 1840, 3680]
+        tileCTUOffsets = [0, 40, 80]
         ctuOffsetBitSize = math.ceil(math.log((OUTPUT_WIDTH/CTU_SIZE)*(OUTPUT_HEIGHT/CTU_SIZE), 2))
         # Now do I and P frames until the end
+        # Low quality on the sides, high quality in the middle
         i = 0
         while True:
             nal = getNAL(files[0])
@@ -249,17 +260,49 @@ if __name__=='__main__':
             if nalType == 'I_frame':
                 print('I frame')
                 modifyIFrame(nal, i==0, tileCTUOffsets[i], ctuOffsetBitSize).tofile(f)
-                i+=1
+                i += 1
             elif nalType == 'P_frame':
                 print('P frame')
                 modifyPFrame(nal, i==0, tileCTUOffsets[i], ctuOffsetBitSize).tofile(f)
-                i+=1
+                i += 1
             elif nalType == 'SEI':
                 print('SEI')
                 nal.tofile(f)
                 i = 0
             elif nalType == 'PS':
+                print('PS (ignoring)')
                 continue
             else:
                 print('Error: invalid frame type "{}"'.format(nalType))
                 break
+
+            #for file_num, file_obj in enumerate(files):
+            #    nal = getNAL(file_obj)
+            #    nalType = checkNALType(nal)
+            #    if nalType == 'I_frame':
+            #        print('I frame')
+            #        print(i)
+            #        if (i==0 and file_num==1) or (i==1 and file_num==0) or (i==2 and file_num==1):
+            #            modifyIFrame(nal, i==0, tileCTUOffsets[i], ctuOffsetBitSize).tofile(f)
+            #        if file_num==1:
+            #            i += 1
+            #    elif nalType == 'P_frame':
+            #        print('P frame')
+            #        print(i)
+            #        if (i==0 and file_num==1) or (i==1 and file_num==0) or (i==2 and file_num==1):
+            #            modifyPFrame(nal, i==0, tileCTUOffsets[i], ctuOffsetBitSize).tofile(f)
+            #        if file_num==1:
+            #            i += 1
+            #    elif nalType == 'SEI':
+            #        print('SEI')
+            #        print(i)
+            #        if (file_num==0):
+            #            nal.tofile(f)
+            #        if file_num==1:
+            #            i = 0
+            #    elif nalType == 'PS':
+            #        print('PS (ignoring)')
+            #        continue
+            #    else:
+            #        print('Error: invalid frame type "{}"'.format(nalType))
+            #        break
