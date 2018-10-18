@@ -138,39 +138,46 @@ def modifyPPS(stream, num_tile_rows=1, num_tile_cols=3):
     return bs.Bits(ppsString)
 
 # Modify an I-frame as follows:
+# - segmentAddress
 # - set slice_loop_filter_across_... = 0
 # - insert num_entrypoint_offsets
 def modifyIFrame(stream, isFirst, segmentAddress, ctuOffsetBitSize):
-    iString = ''
-    # Consume border (0x000001 -> 4*6 = 24 bits)01011101
-    iString += stream.read('bits:24').bin
-    print(iString)
-    # Consume NAL header
-    iString += stream.read('bits:16').bin
-    # Navigate to slice_loop_filter_across_...
-    iString += stream.read('bits:1').bin
-    iString += stream.read('bits:1').bin
-    iString += bs.Bits(ue=stream.read('ue')).bin
+    #####iString = ''
+    ####iString += stream.read('bits:24').bin
+    ####print(iString)
+    ##### Consume NAL header
+    ####iString += stream.read('bits:16').bin
+    ##### Navigate to slice_loop_filter_across_...
+    ####iString += stream.read('bits:1').bin
+    ####iString += stream.read('bits:1').bin
+    ####iString += bs.Bits(ue=stream.read('ue')).bin
+    ####if not isFirst:
+    ####    stream.read('bits:{}'.format(ctuOffsetBitSize))
+    ####    iString += bs.Bits(uint=segmentAddress, length=ctuOffsetBitSize).bin
+    newNAL = stream.readlist('bits:42, ue')
     if not isFirst:
         stream.read('bits:{}'.format(ctuOffsetBitSize))
-        iString += bs.Bits(uint=segmentAddress, length=ctuOffsetBitSize).bin
-    iString += bs.Bits(ue=stream.read('ue')).bin
-    iString += stream.read('bits:2').bin
-    iString += bs.Bits(se=stream.read('se')).bin
-    # slice_loop_filter_across_...
-    stream.read('bits:1')
-    iString += '0'
-    # Insert num_entry_point_offsets (Exp-Golomb)
-    iString += '1'
-    # byte_align() the header
-    iString += '1'
+        newNAL.append(bs.Bits(uint=segmentAddress, length=ctuOffsetBitSize))
+    ####iString += bs.Bits(ue=stream.read('ue')).bin
+    ####iString += stream.read('bits:2').bin
+    ####iString += bs.Bits(se=stream.read('se')).bin
+    newNAL.append(stream.readlist('ue, bits:2, se'))
+    ##### slice_loop_filter_across_...
+    ####stream.read('bits:1')
+    ####iString += '0'
+    ##### Insert num_entry_point_offsets (Exp-Golomb)
+    ####iString += '1'
+    ##### byte_align() the header
+    ####iString += '1'
     numZeros = (8 - (len(iString) % 8)) if (len(iString) % 8 != 0) else 0
-    iString += '0' * numZeros
+    ####iString += '0' * numZeros
+    newNAL.append('0b011{}'.format('0' * numZeros))
     # Remove the previous byte alignment
     stream.read('bits:1')
     numZeros = (8 - (stream.pos % 8)) if (stream.pos % 8 != 0) else 0
     stream.read('bits:{}'.format(numZeros))
     # Copy the rest of the I frame
+    iString = newNAL.bin
     iString = consumeNALRemainder(stream, iString, False)
     iString = '0b' + iString
     return bs.Bits(iString)
