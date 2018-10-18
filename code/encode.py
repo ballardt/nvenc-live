@@ -7,8 +7,8 @@ CTU_SIZE = 32
 OUTPUT_WIDTH = 3840
 OUTPUT_HEIGHT = 1472
 
-OUTPUT_WIDTH = int(OUTPUT_WIDTH/3)
-OUTPUT_HEIGHT = int(OUTPUT_HEIGHT*3)
+#OUTPUT_WIDTH = int(OUTPUT_WIDTH/3)
+#OUTPUT_HEIGHT = int(OUTPUT_HEIGHT*3)
 
 def getNAL(stream):
     nalString = '0x'
@@ -38,13 +38,14 @@ def checkNALType(stream):
         nalType = 'PS'
     return nalType
 
-def consumeNALRemainder(stream, nalString, doEmulationPrevention=False):
+def consumeNALRemainder(stream, nalString, doEmulationPrevention=True):
     # Now get the rest
     # First, get byte-aligned (in the original stream, NOT nalString)
     numToRead = (8 - (stream.pos % 8)) if (stream.pos % 8 != 0) else 0
     nalString += stream.read('bits:{}'.format(numToRead)).bin
     # Go through the bytes, keeping an eye out for emulation_prevention_three_bytes
     zeroCounter = 0
+    mostRecentByteCheck = -1
     while stream.pos < stream.len:
         if ((stream.len - stream.pos) < 8):
             numToRead = (8 - (stream.pos % 8)) if (stream.pos % 8 != 0) else 0
@@ -54,21 +55,19 @@ def consumeNALRemainder(stream, nalString, doEmulationPrevention=False):
             s = stream.read('bits:8').bin
             # emulation_prevention_three_byte must be byte-aligned
             if doEmulationPrevention and s == '00000011':
-                numToRead = (8 - (len(nalString) % 8)) if (len(nalString) % 8 != 0) else 0
-                nalString += stream.read('bits:{}'.format(numToRead)).bin
-                nalString += s
-            elif doEmulationPrevention and s == '00000000':
-                zeroCounter += 1
-                if zeroCounter == 2:
-                    numToRead = (8 - (len(nalString) % 8)) if (len(nalString) % 8 != 0) else 0
-                    nalString += stream.read('bits:{}'.format(numToRead)).bin
-                    nalString += s
-                    nalString += '00000011'
-                    zeroCounter = 0
-                else:
-                    nalString += s
+                continue
             else:
                 nalString += s
+                # Make sure the most recent bytes weren't 0x0000. If they were, we need
+                # to do emulation prevention.
+                if doEmulationPrevention and len(nalString) > 16:
+                    idx = (len(nalString) - (len(nalString) % 8)) - 16
+                    if idx != mostRecentByteCheck:
+                        mostRecentByteCheck = idx
+                        chunk = nalString[idx:idx+16]
+                        if chunk == '0000000000000000':
+                            nalString = nalString[:idx+16] + '00000011' + nalString[idx+16:]
+                            print(nalString)
 
     # Remove the previous byte alignment
     nalString = nalString[:nalString.rfind('1')]
@@ -110,7 +109,7 @@ def modifySPS(stream, width=OUTPUT_WIDTH, height=OUTPUT_HEIGHT):
 # Modify the PPS as follows:
 # - set tiles_enabled_flag = 1
 # - insert the 4 tile-related fields
-def modifyPPS(stream, num_tile_rows=3, num_tile_cols=1):
+def modifyPPS(stream, num_tile_rows=1, num_tile_cols=3):
     ppsString = ''
     # Consume border
     ppsString += stream.read('bits:24').bin
@@ -237,9 +236,11 @@ if __name__=='__main__':
         # VPS
         getNAL(files[0]).tofile(f)
         # SPS
+        print('SPS')
         sps, tileSizes[0] = modifySPS(getNAL(files[0]), OUTPUT_WIDTH, OUTPUT_HEIGHT)
         sps.tofile(f)
         # PPS
+        print('PPS')
         modifyPPS(getNAL(files[0])).tofile(f)
         # SEI
         getNAL(files[0]).tofile(f)
@@ -249,8 +250,8 @@ if __name__=='__main__':
         getNAL(files[1])
         getNAL(files[1])
         # Slice segment addresses
-        #tileCTUOffsets = [0, 40, 80]
-        tileCTUOffsets = [0, 1840, 3680]
+        tileCTUOffsets = [0, 40, 80]
+        #tileCTUOffsets = [0, 1840, 3680]
         ctuOffsetBitSize = math.ceil(math.log((OUTPUT_WIDTH/CTU_SIZE)*(OUTPUT_HEIGHT/CTU_SIZE), 2))
         # Now do I and P frames until the end
         # Low quality on the sides, high quality in the middle
