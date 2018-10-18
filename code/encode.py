@@ -12,26 +12,29 @@ OUTPUT_HEIGHT = 1472
 #OUTPUT_HEIGHT = int(OUTPUT_HEIGHT*3)
 
 def getNAL(stream, nalNum):
-    #nalString = '0x'
     startIdx = stream.pos
-    borders = list(itertools.islice(stream.findall('0x000001', bytealigned=True), nalNum, nalNum+2))
+    print('nalNum: {}'.format(nalNum))
+    borders = list(stream.findall('0x000001', bytealigned=True, start=startIdx, count=2))
+    print(borders)
+    stream.pos = startIdx
+    nalBits = stream.read('bits:{}'.format(borders[1]-stream.pos))
+    ###return nalBits
     stream.pos = startIdx
     # Go past the first border, including it in the NAL
-    #nalBits.append(stream.read('bits:{}'.format((borders[0]-startIdx)+24)))
-    nalBits = stream.read('bits:{}'.format(borders[1]-stream.pos))
-    #while stream.peek('hex:24') != '000001':
-    #    #nalString += stream.read('hex:8')
-    #    nalBits.append(stream.read('hex:8'))
-    ##nalString += stream.read('hex:24')
-    #nalBits.append(stream.read('hex:24'))
-    # Now go until the next border, leaving it for the next NAL
-    #nalBits.append(stream.read('bits:{}'.format(borders[1]-stream.pos)))
-    #while stream.peek('hex:24') != '000001':
-    #    #nalString += stream.read('hex:8')
-    #    nalBits.append(stream.read('hex:8'))
-    #print(nalBits.pos)
-    ##return bs.BitStream(nalString)
-    return nalBits
+    nalString = '0x'
+    while stream.peek('hex:24') != '000001':
+        nalString += stream.read('hex:8')
+    nalString += stream.read('hex:24')
+    ## Now go until the next border, leaving it for the next NAL
+    while stream.peek('hex:24') != '000001':
+        nalString += stream.read('hex:8')
+    if nalString != '0x'+nalBits.hex:
+        n = '0x'+nalBits.hex
+        if (len(nalString) == 16332):
+            print(nalString[16330:])
+            print(n[16330:16380])
+            exit(1)
+    return bs.BitStream(nalString)
 
 def consumeBorder(stream, peek=False):
     return stream.read('bits:24')
@@ -162,6 +165,7 @@ def modifyIFrame(stream, isFirst, segmentAddress, ctuOffsetBitSize):
     iString = ''
     # Consume border (0x000001 -> 4*6 = 24 bits)01011101
     iString += stream.read('bits:24').bin
+    print(iString)
     # Consume NAL header
     iString += stream.read('bits:16').bin
     # Navigate to slice_loop_filter_across_...
@@ -274,26 +278,24 @@ if __name__=='__main__':
         nalNum = 4
         while True:
             for file_num, file_obj in enumerate(files):
+                print('i: ', i)
                 nal = getNAL(file_obj, nalNum)
                 nalNum += 1
                 nalType = checkNALType(nal)
                 if nalType == 'I_frame':
                     print('I frame')
-                    print(i)
                     if (i==0 and file_num==1) or (i==1 and file_num==0) or (i==2 and file_num==1):
                         modifyIFrame(nal, i==0, tileCTUOffsets[i], ctuOffsetBitSize).tofile(f)
                     if file_num==1:
                         i += 1
                 elif nalType == 'P_frame':
                     print('P frame')
-                    print(i)
                     if (i==0 and file_num==1) or (i==1 and file_num==0) or (i==2 and file_num==1):
                         modifyPFrame(nal, i==0, tileCTUOffsets[i], ctuOffsetBitSize).tofile(f)
                     if file_num==1:
                         i += 1
                 elif nalType == 'SEI':
                     print('SEI')
-                    print(i)
                     if (file_num==0):
                         nal.tofile(f)
                     if file_num==1:
