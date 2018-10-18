@@ -7,8 +7,8 @@ CTU_SIZE = 32
 OUTPUT_WIDTH = 3840
 OUTPUT_HEIGHT = 1472
 
-#OUTPUT_WIDTH = int(OUTPUT_WIDTH/3)
-#OUTPUT_HEIGHT = int(OUTPUT_HEIGHT*3)
+OUTPUT_WIDTH = int(OUTPUT_WIDTH/3)
+OUTPUT_HEIGHT = int(OUTPUT_HEIGHT*3)
 
 def getNAL(stream):
     nalString = '0x'
@@ -110,7 +110,7 @@ def modifySPS(stream, width=OUTPUT_WIDTH, height=OUTPUT_HEIGHT):
 # Modify the PPS as follows:
 # - set tiles_enabled_flag = 1
 # - insert the 4 tile-related fields
-def modifyPPS(stream, num_tile_rows=1, num_tile_cols=3):
+def modifyPPS(stream, num_tile_rows=3, num_tile_cols=1):
     ppsString = ''
     # Consume border
     ppsString += stream.read('bits:24').bin
@@ -249,7 +249,8 @@ if __name__=='__main__':
         getNAL(files[1])
         getNAL(files[1])
         # Slice segment addresses
-        tileCTUOffsets = [0, 40, 80]
+        #tileCTUOffsets = [0, 40, 80]
+        tileCTUOffsets = [0, 1840, 3680]
         ctuOffsetBitSize = math.ceil(math.log((OUTPUT_WIDTH/CTU_SIZE)*(OUTPUT_HEIGHT/CTU_SIZE), 2))
         # Now do I and P frames until the end
         # Low quality on the sides, high quality in the middle
