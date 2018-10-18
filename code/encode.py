@@ -251,60 +251,38 @@ if __name__=='__main__':
         getNAL(files[1])
         # Slice segment addresses
         tileCTUOffsets = [0, 40, 80]
-        #tileCTUOffsets = [0, 1840, 3680]
         ctuOffsetBitSize = math.ceil(math.log((OUTPUT_WIDTH/CTU_SIZE)*(OUTPUT_HEIGHT/CTU_SIZE), 2))
         # Now do I and P frames until the end
         # Low quality on the sides, high quality in the middle
         i = 0
         while True:
-            nal = getNAL(files[0])
-            nalType = checkNALType(nal)
-            if nalType == 'I_frame':
-                print('I frame')
-                modifyIFrame(nal, i==0, tileCTUOffsets[i], ctuOffsetBitSize).tofile(f)
-                i += 1
-            elif nalType == 'P_frame':
-                print('P frame')
-                modifyPFrame(nal, i==0, tileCTUOffsets[i], ctuOffsetBitSize).tofile(f)
-                i += 1
-            elif nalType == 'SEI':
-                print('SEI')
-                nal.tofile(f)
-                i = 0
-            elif nalType == 'PS':
-                print('PS (ignoring)')
-                continue
-            else:
-                print('Error: invalid frame type "{}"'.format(nalType))
-                break
-
-            #for file_num, file_obj in enumerate(files):
-            #    nal = getNAL(file_obj)
-            #    nalType = checkNALType(nal)
-            #    if nalType == 'I_frame':
-            #        print('I frame')
-            #        print(i)
-            #        if (i==0 and file_num==1) or (i==1 and file_num==0) or (i==2 and file_num==1):
-            #            modifyIFrame(nal, i==0, tileCTUOffsets[i], ctuOffsetBitSize).tofile(f)
-            #        if file_num==1:
-            #            i += 1
-            #    elif nalType == 'P_frame':
-            #        print('P frame')
-            #        print(i)
-            #        if (i==0 and file_num==1) or (i==1 and file_num==0) or (i==2 and file_num==1):
-            #            modifyPFrame(nal, i==0, tileCTUOffsets[i], ctuOffsetBitSize).tofile(f)
-            #        if file_num==1:
-            #            i += 1
-            #    elif nalType == 'SEI':
-            #        print('SEI')
-            #        print(i)
-            #        if (file_num==0):
-            #            nal.tofile(f)
-            #        if file_num==1:
-            #            i = 0
-            #    elif nalType == 'PS':
-            #        print('PS (ignoring)')
-            #        continue
-            #    else:
-            #        print('Error: invalid frame type "{}"'.format(nalType))
-            #        break
+            for file_num, file_obj in enumerate(files):
+                nal = getNAL(file_obj)
+                nalType = checkNALType(nal)
+                if nalType == 'I_frame':
+                    print('I frame')
+                    print(i)
+                    if (i==0 and file_num==1) or (i==1 and file_num==0) or (i==2 and file_num==1):
+                        modifyIFrame(nal, i==0, tileCTUOffsets[i], ctuOffsetBitSize).tofile(f)
+                    if file_num==1:
+                        i += 1
+                elif nalType == 'P_frame':
+                    print('P frame')
+                    print(i)
+                    if (i==0 and file_num==1) or (i==1 and file_num==0) or (i==2 and file_num==1):
+                        modifyPFrame(nal, i==0, tileCTUOffsets[i], ctuOffsetBitSize).tofile(f)
+                    if file_num==1:
+                        i += 1
+                elif nalType == 'SEI':
+                    print('SEI')
+                    print(i)
+                    if (file_num==0):
+                        nal.tofile(f)
+                    if file_num==1:
+                        i = 0
+                elif nalType == 'PS':
+                    print('PS (ignoring)')
+                    continue
+                else:
+                    print('Error: invalid frame type "{}"'.format(nalType))
+                    break
