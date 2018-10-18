@@ -8,32 +8,11 @@ CTU_SIZE = 32
 OUTPUT_WIDTH = 3840
 OUTPUT_HEIGHT = 1472
 
-#OUTPUT_WIDTH = int(OUTPUT_WIDTH/3)
-#OUTPUT_HEIGHT = int(OUTPUT_HEIGHT*3)
-
 def getNAL(stream, nalNum):
     startIdx = stream.pos
-    print('nalNum: {}'.format(nalNum))
     borders = list(stream.findall('0x000001', bytealigned=True, start=startIdx, count=2))
-    print(borders)
     stream.pos = startIdx
-    nalBits = stream.read('bits:{}'.format(borders[1]-stream.pos))
-    ###return nalBits
-    stream.pos = startIdx
-    # Go past the first border, including it in the NAL
-    nalString = '0x'
-    while stream.peek('hex:24') != '000001':
-        nalString += stream.read('hex:8')
-    nalString += stream.read('hex:24')
-    ## Now go until the next border, leaving it for the next NAL
-    while stream.peek('hex:24') != '000001':
-        nalString += stream.read('hex:8')
-    if nalString != '0x'+nalBits.hex:
-        n = '0x'+nalBits.hex
-        if (len(nalString) == 16332):
-            print(nalString[16330:])
-            print(n[16330:16380])
-            exit(1)
+    nalBits = stream.read('bits:{}'.format(borders[1]-startIdx))
     return nalBits
 
 def consumeBorder(stream, peek=False):
