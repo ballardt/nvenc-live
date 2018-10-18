@@ -246,6 +246,8 @@ if __name__=='__main__':
             bs.BitStream(filename='/home/trevor/Projects/hevc/videos/ms9390_{}.hevc'.format(i))
             for i in range(NUM_FILES)
         ]
+        borders = [list(bitstr.findall('0x000001', bytealigned=True)) for bitstr in files]
+        print(borders)
         # We only need PS info from one tile in the output stream header
         # VPS
         getNAL(files[0], 0).tofile(f)
