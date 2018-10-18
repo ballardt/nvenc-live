@@ -232,11 +232,12 @@ if __name__=='__main__':
         files[1].pos = 0
         # We only need PS info from one tile in the output stream header
         # VPS
-        #files[0].read('bits:{}'.format(borders[0][1])).tofile(f)
-        getNAL(files[0], 0).tofile(f)
+        files[0].read('bits:{}'.format(borders[0][1])).tofile(f)
+        #getNAL(files[0], 0).tofile(f)
         # SPS
         print('SPS')
-        sps, tileSizes[0] = modifySPS(getNAL(files[0], 1), OUTPUT_WIDTH, OUTPUT_HEIGHT)
+        #sps, tileSizes[0] = modifySPS(getNAL(files[0], 1), OUTPUT_WIDTH, OUTPUT_HEIGHT)
+        sps, tileSizes[0] = modifySPS(files[0].read('bits:{}'.format(borders[0][2] - files[0].pos)))
         sps.tofile(f)
         # PPS
         print('PPS')
