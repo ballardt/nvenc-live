@@ -1,6 +1,7 @@
 #!/bin/python3
 
 import bitstring as bs
+import itertools
 import math
 
 CTU_SIZE = 32
@@ -10,16 +11,29 @@ OUTPUT_HEIGHT = 1472
 #OUTPUT_WIDTH = int(OUTPUT_WIDTH/3)
 #OUTPUT_HEIGHT = int(OUTPUT_HEIGHT*3)
 
-def getNAL(stream):
-    nalString = '0x'
+def getNAL(stream, nalNum):
+    #nalString = '0x'
+    startIdx = stream.pos
+    nalBits = bs.BitStream()
+    borders = list(itertools.islice(stream.findall('0x000001', bytealigned=True), nalNum, nalNum+2))
+    stream.pos = startIdx
     # Go past the first border, including it in the NAL
-    while stream.peek('hex:24') != '000001':
-        nalString += stream.read('hex:8')
-    nalString += stream.read('hex:24')
+    nalBits.append(stream.read('bits:{}'.format((borders[0]-startIdx)+24)))
+    #while stream.peek('hex:24') != '000001':
+    #    #nalString += stream.read('hex:8')
+    #    nalBits.append(stream.read('hex:8'))
+    ##nalString += stream.read('hex:24')
+    #nalBits.append(stream.read('hex:24'))
     # Now go until the next border, leaving it for the next NAL
-    while stream.peek('hex:24') != '000001':
-        nalString += stream.read('hex:8')
-    return bs.BitStream(nalString)
+    print(borders)
+    print(stream.pos)
+    nalBits.append(stream.read('bits:{}'.format(borders[1]-stream.pos)))
+    #while stream.peek('hex:24') != '000001':
+    #    #nalString += stream.read('hex:8')
+    #    nalBits.append(stream.read('hex:8'))
+    #print(nalBits.pos)
+    ##return bs.BitStream(nalString)
+    return nalBits
 
 def consumeBorder(stream, peek=False):
     return stream.read('bits:24')
@@ -234,30 +248,32 @@ if __name__=='__main__':
         ]
         # We only need PS info from one tile in the output stream header
         # VPS
-        getNAL(files[0]).tofile(f)
+        getNAL(files[0], 0).tofile(f)
         # SPS
         print('SPS')
-        sps, tileSizes[0] = modifySPS(getNAL(files[0]), OUTPUT_WIDTH, OUTPUT_HEIGHT)
+        sps, tileSizes[0] = modifySPS(getNAL(files[0], 1), OUTPUT_WIDTH, OUTPUT_HEIGHT)
         sps.tofile(f)
         # PPS
         print('PPS')
-        modifyPPS(getNAL(files[0])).tofile(f)
+        modifyPPS(getNAL(files[0], 2)).tofile(f)
         # SEI
-        getNAL(files[0]).tofile(f)
+        getNAL(files[0], 3).tofile(f)
         # Advance the other file, since we don't use its PS
-        getNAL(files[1])
-        getNAL(files[1])
-        getNAL(files[1])
-        getNAL(files[1])
+        getNAL(files[1], 0)
+        getNAL(files[1], 1)
+        getNAL(files[1], 2)
+        getNAL(files[1], 3)
         # Slice segment addresses
         tileCTUOffsets = [0, 40, 80]
         ctuOffsetBitSize = math.ceil(math.log((OUTPUT_WIDTH/CTU_SIZE)*(OUTPUT_HEIGHT/CTU_SIZE), 2))
         # Now do I and P frames until the end
         # Low quality on the sides, high quality in the middle
         i = 0
+        nalNum = 4
         while True:
             for file_num, file_obj in enumerate(files):
-                nal = getNAL(file_obj)
+                nal = getNAL(file_obj, nalNum)
+                nalNum += 1
                 nalType = checkNALType(nal)
                 if nalType == 'I_frame':
                     print('I frame')
