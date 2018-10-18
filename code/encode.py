@@ -34,7 +34,7 @@ def getNAL(stream, nalNum):
             print(nalString[16330:])
             print(n[16330:16380])
             exit(1)
-    return bs.BitStream(nalString)
+    return nalBits
 
 def consumeBorder(stream, peek=False):
     return stream.read('bits:24')
