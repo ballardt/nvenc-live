@@ -1,5 +1,11 @@
 #!/bin/python3
 
+# This file is used for reference. It's pretty quick, but not realtime.
+# Part of the file builds up a literal string of bits (SPS, PPS, P-frames), while other parts
+# conform more closely to normal BitString usage. It was easier to prototype by building up
+# a string literal, but this was slow, so I switched to actual BitString functions for the
+# very computationally expensive parts, but it was still too slow, so I abandoned it.
+
 import bitstring as bs
 import itertools
 import math
@@ -32,7 +38,49 @@ def checkNALType(stream):
         nalType = 'PS'
     return nalType
 
-def consumeNALRemainder(stream, nalString, doEmulationPrevention=True):
+def consumeNALRemainder(stream, nalString, doEmulationPrevention=True, newVersion=False, newNAL=None):
+    if newVersion:
+        # Now get the rest
+        # First, get byte-aligned (in the original stream, NOT nalString)
+        numToRead = (8 - (stream.pos % 8)) if (stream.pos % 8 != 0) else 0
+        newNAL.append(stream.read('bits:{}'.format(numToRead)))
+        # Go through the bytes, keeping an eye out for emulation_prevention_three_bytes
+        zeroCounter = 0
+        mostRecentByteCheck = -1
+        while stream.pos < stream.len:
+            if ((stream.len - stream.pos) < 8):
+                numToRead = (8 - (stream.pos % 8)) if (stream.pos % 8 != 0) else 0
+                newNAL.append(stream.read('bits:{}'.format(numToRead)))
+            else:
+                s = stream.read('bits:8').bin
+                # emulation_prevention_three_byte must be byte-aligned
+                if doEmulationPrevention and s == '00000011':
+                    continue
+                else:
+                    newNAL.append('0b'+s)
+                    # Make sure the most recent bytes weren't 0x0000. If they were, we need
+                    # to do emulation prevention.
+                    if doEmulationPrevention and newNAL.len > 16:
+                        idx = (newNAL.len - (newNAL.len % 8)) - 16
+                        if idx != mostRecentByteCheck:
+                            mostRecentByteCheck = idx
+                            chunk = newNAL[idx:idx+16].bin
+                            if chunk == '0000000000000000':
+                                newNAL.insert('0b00000011', idx+16)
+                                #print(nalString)
+
+        # Remove the previous byte alignment
+        nalString = nalString[:nalString.rfind('1')]
+        del newNAL[newNAL.rfind('0b1')[0]:]
+
+        # Byte-align by appending a 1 and then 0s
+        newNAL.append('0b1')
+        numZeros = (8 - (newNAL.len % 8)) if (newNAL.len % 8 != 0) else 0
+        if numZeros:
+            newNAL.append('0b'+('0' * numZeros))
+
+        return newNAL
+
     # Now get the rest
     # First, get byte-aligned (in the original stream, NOT nalString)
     numToRead = (8 - (stream.pos % 8)) if (stream.pos % 8 != 0) else 0
@@ -142,45 +190,29 @@ def modifyPPS(stream, num_tile_rows=1, num_tile_cols=3):
 # - set slice_loop_filter_across_... = 0
 # - insert num_entrypoint_offsets
 def modifyIFrame(stream, isFirst, segmentAddress, ctuOffsetBitSize):
-    #####iString = ''
-    ####iString += stream.read('bits:24').bin
-    ####print(iString)
-    ##### Consume NAL header
-    ####iString += stream.read('bits:16').bin
-    ##### Navigate to slice_loop_filter_across_...
-    ####iString += stream.read('bits:1').bin
-    ####iString += stream.read('bits:1').bin
-    ####iString += bs.Bits(ue=stream.read('ue')).bin
-    ####if not isFirst:
-    ####    stream.read('bits:{}'.format(ctuOffsetBitSize))
-    ####    iString += bs.Bits(uint=segmentAddress, length=ctuOffsetBitSize).bin
-    newNAL = stream.readlist('bits:42, ue')
+    newNAL = bs.BitArray()
+    newNAL.append(stream.read('bits:42'))
+    newNAL.append('0b'+bs.Bits(ue=stream.read('ue')).bin)
     if not isFirst:
         stream.read('bits:{}'.format(ctuOffsetBitSize))
-        newNAL.append(bs.Bits(uint=segmentAddress, length=ctuOffsetBitSize))
-    ####iString += bs.Bits(ue=stream.read('ue')).bin
-    ####iString += stream.read('bits:2').bin
-    ####iString += bs.Bits(se=stream.read('se')).bin
-    newNAL.append(stream.readlist('ue, bits:2, se'))
-    ##### slice_loop_filter_across_...
-    ####stream.read('bits:1')
-    ####iString += '0'
-    ##### Insert num_entry_point_offsets (Exp-Golomb)
-    ####iString += '1'
-    ##### byte_align() the header
-    ####iString += '1'
-    numZeros = (8 - (len(iString) % 8)) if (len(iString) % 8 != 0) else 0
-    ####iString += '0' * numZeros
-    newNAL.append('0b011{}'.format('0' * numZeros))
+        newNAL.append('0b'+bs.Bits(uint=segmentAddress, length=ctuOffsetBitSize).bin)
+    newNAL.append('0b'+bs.Bits(ue=stream.read('ue')).bin)
+    newNAL.append(stream.read('bits:2'))
+    newNAL.append('0b'+bs.Bits(se=stream.read('se')).bin)
+    # slice_loop_filter_across, num_entry_point, byte_align
+    stream.read('bits:1')
+    newNAL.append('0b011')
+    numZeros = (8 - (len(newNAL) % 8)) if (len(newNAL) % 8 != 0) else 0
+    newNAL.append('0b'+('0' * numZeros))
     # Remove the previous byte alignment
     stream.read('bits:1')
     numZeros = (8 - (stream.pos % 8)) if (stream.pos % 8 != 0) else 0
     stream.read('bits:{}'.format(numZeros))
     # Copy the rest of the I frame
-    iString = newNAL.bin
-    iString = consumeNALRemainder(stream, iString, False)
-    iString = '0b' + iString
-    return bs.Bits(iString)
+    #iString = newNAL.bin
+    consumeNALRemainder(stream, '', False, newVersion=True, newNAL=newNAL)
+    #iString = '0b' + iString
+    return newNAL
 
 # Modify a P-frame as follows:
 # - set slice_loop_filter_across_... = 0
@@ -265,30 +297,30 @@ if __name__=='__main__':
         nalNum = 4
         while True:
             for file_num, file_obj in enumerate(files):
-                print('i: ', i)
+                #print('i: ', i)
                 nal = getNAL(file_obj, nalNum)
                 nalNum += 1
                 nalType = checkNALType(nal)
                 if nalType == 'I_frame':
-                    print('I frame')
+                    #print('I frame')
                     if (i==0 and file_num==1) or (i==1 and file_num==0) or (i==2 and file_num==1):
                         modifyIFrame(nal, i==0, tileCTUOffsets[i], ctuOffsetBitSize).tofile(f)
                     if file_num==1:
                         i += 1
                 elif nalType == 'P_frame':
-                    print('P frame')
+                    #print('P frame')
                     if (i==0 and file_num==1) or (i==1 and file_num==0) or (i==2 and file_num==1):
                         modifyPFrame(nal, i==0, tileCTUOffsets[i], ctuOffsetBitSize).tofile(f)
                     if file_num==1:
                         i += 1
                 elif nalType == 'SEI':
-                    print('SEI')
+                    #print('SEI')
                     if (file_num==0):
                         nal.tofile(f)
                     if file_num==1:
                         i = 0
                 elif nalType == 'PS':
-                    print('PS (ignoring)')
+                    #print('PS (ignoring)')
                     continue
                 else:
                     print('Error: invalid frame type "{}"'.format(nalType))
