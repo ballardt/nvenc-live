@@ -52,16 +52,30 @@ int getNextNAL(std::ifstream& ifs, std::vector<Block>* buf) {
 	return bufIdx-3;
 }
 
-int modifySPS(std::vector<Block>* nal, int nalLen) {
-	// TODO calculate new size
-	Bitset oldBits(spsLen*8);
-	Bitset newBits((spsLen+50)*8);
+void copyBits(Bitset* oldBits, Bitset* newBits, int oldBitsPos, int newBitsPos, int numBits) {
+	for (int i=0; i<numBits; i++) {
+		//(*newBits)[newBitsPos+i] = (*oldBits)[oldBitsPos+i];
+		newBits->push_back((*oldBits)[oldBitsPos+i]);
+	}
+}
 
-	boost::from_block_range(nal->begin(), nal->end(), x);
+int modifySPS(std::vector<Block>* nal, int nalLen) {
+	// TODO calculate new size? Can use push_back if necessary, but this is sloppy
+	int oldBitsPos = 0;
+	int newBitsPos = 0;
+	Bitset oldBits(nalLen*8);
+	Bitset newBits(0);
+
+	// Load the SPS into a bitset
+	boost::from_block_range(nal->begin(), nal->end(), oldBits);
+
+	// Copy over the old SPS into the new bitset, 
+	copyBits(&oldBits, &newBits, oldBitsPos, newBitsPos, oldBits.size());
+
+	// Place the new bits into the NAL
 	nal->clear();
-	boost::to_block_range(x, std::back_inserter(*nal));
-	//ofs.write((char*), 999);
-	return x.size();
+	boost::to_block_range(newBits, std::back_inserter(*nal));
+	return nal->size();
 }
 
 int main(int, char*[]) {
