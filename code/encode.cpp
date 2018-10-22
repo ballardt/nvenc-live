@@ -104,10 +104,7 @@ int getNextNAL(std::ifstream& ifs, std::vector<Block>* buf) {
  */
 int copyBits(Bitset* oldBits, Bitset* newBits, int oldBitsPos, int numBits) {
 	for (int i=0; i<numBits; i++) {
-		//(*newBits)[newBitsPos+i] = (*oldBits)[oldBitsPos+i];
-		//if (numBits == 132) std::cout << (*oldBits)[oldBitsPos+i];
 		newBits->push_back((*oldBits)[oldBitsPos+i]);
-		//if (numBits == 132) std::cout << *newBits << std::endl;
 	}
 	return numBits;
 }
@@ -294,7 +291,6 @@ void doneEditingNAL(std::vector<Block>* nal, Bitset* newBits, Bitset* oldBits, i
 								tempBits.push_back((*newBits)[newBits->size()-1]);
 								newBits->pop_back();
 							}
-							std::cout << newBits->size() << std::endl;
 							newBits->push_back(0);
 							newBits->push_back(0);
 							newBits->push_back(0);
@@ -306,7 +302,6 @@ void doneEditingNAL(std::vector<Block>* nal, Bitset* newBits, Bitset* oldBits, i
 							for (int i=0; i<tempBits.size(); i++) {
 								newBits->push_back(tempBits[i]);
 							}
-							std::cout << newBits->size() << std::endl;
 						}
 					}
 				}
@@ -444,27 +439,37 @@ void modifyPSlice(std::vector<Block>* nal, bool isFirstSlice, int ctuOffset, int
 }
 
 int main(int, char*[]) {
-	std::ifstream ifs("../../videos/ms9390_0.hevc", std::ios::binary);
+	std::ifstream ifs_0("../../videos/ms9390_0.hevc", std::ios::binary);
+	std::ifstream ifs_1("../../videos/ms9390_1.hevc", std::ios::binary);
 	std::ofstream ofs("test.hevc", std::ios::binary);
 	std::vector<Block> nal;
 
 	// VPS
-	getNextNAL(ifs, &nal);
+	getNextNAL(ifs_0, &nal);
 	ofs.write((char*)&nal[0], nal.size());
 	nal.clear();
 	// SPS
-	getNextNAL(ifs, &nal);
+	getNextNAL(ifs_0, &nal);
 	modifySPS(&nal);
 	ofs.write((char*)&nal[0], nal.size());
 	nal.clear();
 	// PPS
-	getNextNAL(ifs, &nal);
+	getNextNAL(ifs_0, &nal);
 	modifyPPS(&nal);
 	ofs.write((char*)&nal[0], nal.size());
 	nal.clear();
 	// SEI
-	getNextNAL(ifs, &nal);
+	getNextNAL(ifs_0, &nal);
 	ofs.write((char*)&nal[0], nal.size());
+	nal.clear();
+	// Discard the ones from the other ifs
+	getNextNAL(ifs_1, &nal);
+	nal.clear();
+	getNextNAL(ifs_1, &nal);
+	nal.clear();
+	getNextNAL(ifs_1, &nal);
+	nal.clear();
+	getNextNAL(ifs_1, &nal);
 	nal.clear();
 	// Remainder
 	int nalType = 0;
@@ -475,32 +480,43 @@ int main(int, char*[]) {
 		ctuOffsetBits.insert({sliceSegAddrs[i], Bitset(newCtuOffsetBitSize, sliceSegAddrs[i])});
 	}
 	int i = 0;
+	int ifs_idx = -1;
 	while (true) {
-		nalType = getNextNAL(ifs, &nal);
-		switch (nalType) {
-			case P_SLICE:
-				modifyPSlice(&nal, (i==0), sliceSegAddrs[i], oldCtuOffsetBitSize, newCtuOffsetBitSize);
-				ofs.write((char*)&nal[0], nal.size());
-				i++;
-				break;
-			case I_SLICE:
-				// TODO
-				modifyISlice(&nal, (i==0), sliceSegAddrs[i], oldCtuOffsetBitSize, newCtuOffsetBitSize);
-				ofs.write((char*)&nal[0], nal.size());
-				i++;
-				break;
-			case SEI:
-				ofs.write((char*)&nal[0], nal.size());
-				i = 0;
-				break;
-			case OTHER:
-				break;
-			case -1:
-				goto done;
+		for (int ifs_idx=0; ifs_idx<2; i++) {
+			nalType = getNextNAL((ifs_idx == 0 ? ifs_0 : ifs_1), &nal);
+			// Low qual on left and right, high in middle
+			switch (nalType) {
+				case P_SLICE:
+					if ((i==0 && ifs_idx==1) || (i==1 && ifs_idx==0) || (i==2 && ifs_idx==1)) {
+						modifyPSlice(&nal, (i==0), sliceSegAddrs[i], oldCtuOffsetBitSize, newCtuOffsetBitSize);
+						ofs.write((char*)&nal[0], nal.size());
+					}
+					if (ifs_idx == 1) i++;
+					break;
+				case I_SLICE:
+					// TODO
+					if ((i==0 && ifs_idx==1) || (i==1 && ifs_idx==0) || (i==2 && ifs_idx==1)) {
+						modifyISlice(&nal, (i==0), sliceSegAddrs[i], oldCtuOffsetBitSize, newCtuOffsetBitSize);
+						ofs.write((char*)&nal[0], nal.size());
+					}
+					if (ifs_idx == 1) i++;
+					break;
+				case SEI:
+					if ((i==0 && ifs_idx==1) || (i==1 && ifs_idx==0) || (i==2 && ifs_idx==1)) {
+						ofs.write((char*)&nal[0], nal.size());
+					}
+					if (ifs_idx == 1) i = 0;
+					break;
+				case OTHER:
+					break;
+				case -1:
+					goto done;
+			}
+			nal.clear();
 		}
-		nal.clear();
 	}
  done:
-	ifs.close();
+	ifs_0.close();
+	ifs_1.close();
 	ofs.close();
 }
