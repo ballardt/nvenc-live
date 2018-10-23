@@ -172,7 +172,6 @@ void nalToBitset(Bitset* bits, std::vector<Block>* nal) {
 }
 
 void bitsetToNAL(std::vector<Block>* nal, Bitset* bits) {
-
 	// Reverse the order of each byte again for writing out
 	Bitset tempBits(9);
 	for (int i=0; i<bits->size()/8; i++) {
@@ -395,6 +394,17 @@ void modifyISlice(std::vector<Block>* nal, bool isFirstSlice, int ctuOffset, int
 	Bitset newBits(0);
 	// Convert the NAL to some bits
 	nalToBitset(&oldBits, nal);
+	//for (int i=0; i<64; i++) {
+	//	printf("%02X ", (*nal)[i]);
+	//}
+	//printf("\n");
+	//for (int i=0; i<128; i++) {
+	//	if (i % 8 == 0) {
+	//		std::cout << " ";
+	//	}
+	//	std::cout << oldBits[i];
+	//}
+	//std::cout << std::endl << std::endl;
 	// Navigate to the right spot and make our changes
 	oldBitsPos += copyBits(&oldBits, &newBits, oldBitsPos, 42);
 	oldBitsPos += copyExpGolomb(&oldBits, &newBits, oldBitsPos);
@@ -482,7 +492,7 @@ int main(int, char*[]) {
 	int i = 0;
 	int ifs_idx = -1;
 	while (true) {
-		for (int ifs_idx=0; ifs_idx<2; i++) {
+		for (int ifs_idx=0; ifs_idx<2; ifs_idx++) {
 			nalType = getNextNAL((ifs_idx == 0 ? ifs_0 : ifs_1), &nal);
 			// Low qual on left and right, high in middle
 			switch (nalType) {
@@ -494,7 +504,6 @@ int main(int, char*[]) {
 					if (ifs_idx == 1) i++;
 					break;
 				case I_SLICE:
-					// TODO
 					if ((i==0 && ifs_idx==1) || (i==1 && ifs_idx==0) || (i==2 && ifs_idx==1)) {
 						modifyISlice(&nal, (i==0), sliceSegAddrs[i], oldCtuOffsetBitSize, newCtuOffsetBitSize);
 						ofs.write((char*)&nal[0], nal.size());
@@ -502,7 +511,7 @@ int main(int, char*[]) {
 					if (ifs_idx == 1) i++;
 					break;
 				case SEI:
-					if ((i==0 && ifs_idx==1) || (i==1 && ifs_idx==0) || (i==2 && ifs_idx==1)) {
+					if (ifs_idx==0) {
 						ofs.write((char*)&nal[0], nal.size());
 					}
 					if (ifs_idx == 1) i = 0;
