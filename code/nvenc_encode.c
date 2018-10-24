@@ -16,7 +16,7 @@
 #include "link_stitcher.h"
 
 #define NUM_SPLITS 3
-#define BITSTREAM_SIZE 50000
+#define BITSTREAM_SIZE 100000
 
 static AVBufferRef* hwDeviceCtx = NULL;
 static enum AVPixelFormat hwPixFmt;
@@ -34,8 +34,8 @@ typedef enum bitrate {
 } Bitrate;
 int bitrateValues[] = {1600000, 800000};
 
-unsigned char* bitstreams[] = {NULL, NULL};
-unsigned char* tiledBitstream = NULL;
+//unsigned char* bitstreams[] = {NULL, NULL};
+//unsigned char* tiledBitstream = NULL;
 
 /**
  * Get the next frame, consisting of a Y, U, and V component.
@@ -195,7 +195,8 @@ void initializeContext(Bitrate bitrate, int width, int height) {
 	frames[bitrate] = frame;
 }
 
-void sendFrameToNVENC(Bitrate bitrate, AVFrame* frame, unsigned char* bitstream) {
+int sendFrameToNVENC(Bitrate bitrate, AVFrame* frame, unsigned char* bitstream) {
+	int bsPos = 0;
 	pkt->data = NULL;
 	pkt->size = 0;
 	// Send the frame
@@ -209,7 +210,15 @@ void sendFrameToNVENC(Bitrate bitrate, AVFrame* frame, unsigned char* bitstream)
 		ret = avcodec_receive_packet(codecContextArr[bitrate], pkt);
 		if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
 			// Note: we always return here
-			return;
+			memcpy(bitstream+bsPos, pkt->data, pkt->size);
+			int frameSize = bsPos + pkt->size;
+			if (frameSize > BITSTREAM_SIZE) {
+				printf("ERROR: frameSize > BITSTREAM_SIZE (%d > %d)\n", frameSize, BITSTREAM_SIZE);
+			}
+			//bsPos += pktSize;
+			//fwrite(pkt->data, 1, pkt->size, file);
+			av_packet_unref(pkt);
+			return frameSize;
 		}
 		else if (ret < 0) {
 			printf("Error during encoding\n");
@@ -217,11 +226,10 @@ void sendFrameToNVENC(Bitrate bitrate, AVFrame* frame, unsigned char* bitstream)
 		}
 		// Get the data from the GPU
 		// Note: this never gets executed...
-		memcpy(bitrate, pkt->data, pkt->size);
-		int pktSize = pkt->size;
+		memcpy(bitstream+bsPos, pkt->data, pkt->size);
+		bsPos += pkt->size;
 		//fwrite(pkt->data, 1, pkt->size, file);
 		av_packet_unref(pkt);
-		return pktSize;
 	}
 }
 
@@ -229,7 +237,7 @@ void sendFrameToNVENC(Bitrate bitrate, AVFrame* frame, unsigned char* bitstream)
  * Encode a frame with a given AVContext. In other words, encode either at a high
  * or low quality.
  */
-void encodeFrameWithContext(FILE* file, unsigned char* y, unsigned char* u,
+void encodeFrameWithContext(unsigned char* bitstream, unsigned char* y, unsigned char* u,
 							unsigned char* v, int yWidth, int yHeight, Bitrate bitrate,
 							int* bitstreamSize) {
 	if (codecContextArr[bitrate] == NULL) {
@@ -254,7 +262,7 @@ void encodeFrameWithContext(FILE* file, unsigned char* y, unsigned char* u,
 	// Encode the image
 	frame->pts = 0;//frame_num; // TODO this is always 0?
 	//encoder_encode_nvenc(c, frame, pkt, outfile);
-	*bitstreamSize = sendFrameToNVENC(bitrate, frame, file);
+	*bitstreamSize = sendFrameToNVENC(bitrate, frame, bitstream);
 }
 
 /**
@@ -274,9 +282,9 @@ void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width
 int main(int argc, char* argv[]) {
 	FILE* inFile = fopen("../../short_ms9390_3840x1472.yuv", "rb");
 	FILE* outFile = fopen("stitched_ms9390.hevc", "wb");
-	bitstreams[HIGH_BITRATE] = (unsigned char)malloc(sizeof(unsigned char) * BITSTREAM_SIZE);
-	bitstreams[LOW_BITRATE] = (unsigned char)malloc(sizeof(unsigned char) * BITSTREAM_SIZE);
-	tiledBitstream = (unsigned char)malloc(sizeof(unsigned char) * BITSTREAM_SIZE);
+	bitstreams[HIGH_BITRATE] = (unsigned char*)malloc(sizeof(unsigned char) * BITSTREAM_SIZE);
+	bitstreams[LOW_BITRATE] = (unsigned char*)malloc(sizeof(unsigned char) * BITSTREAM_SIZE);
+	tiledBitstream = (unsigned char*)malloc(sizeof(unsigned char) * BITSTREAM_SIZE);
 
 	if (inFile == NULL) {
 		printf("Error: could not open input file\n");
@@ -297,13 +305,14 @@ int main(int argc, char* argv[]) {
 	int tiledBitstreamSize;
 	int tileBitrates[] = {LOW_BITRATE, HIGH_BITRATE, LOW_BITRATE};
 	while (getNextFrame(inFile, y, u, v, ySize)) {
-		bitstreamSizes[0] = 0;
-		bitstreamSizes[1] = 0;
+		bitstreamSizes[HIGH_BITRATE] = 0;
+		bitstreamSizes[LOW_BITRATE] = 0;
 		rearrangeFrame(&y, &u, &v, width, height);
 		encodeFrame(y, u, v, width/NUM_SPLITS, height*NUM_SPLITS, bitstreamSizes);
 		// C++ function
 		tiledBitstreamSize = doStitching(tiledBitstream, bitstreams[HIGH_BITRATE],
-										 bitstreams[LOW_BITRATE], tileBitrates);
+										 bitstreams[LOW_BITRATE], bitstreamSizes[HIGH_BITRATE],
+										 bitstreamSizes[LOW_BITRATE], tileBitrates);
 		fwrite(tiledBitstream, sizeof(unsigned char), tiledBitstreamSize, outFile);
 	}
 
