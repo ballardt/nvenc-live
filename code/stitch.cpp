@@ -463,6 +463,13 @@ void modifyPSlice(std::vector<Block>* nal, bool isFirstSlice, int ctuOffset, int
 extern "C" int doStitching(unsigned char* tiledBitstream, unsigned char* bitstream_0,
 						   unsigned char* bitstream_1, int bitstream_0Size, int bitstream_1Size,
 						   int* tileBitrates) {
+	tiledBitstream[0] = 0xAA;
+	tiledBitstream[1] = 0xBB;
+	tiledBitstream[2] = 0xCC;
+	tiledBitstream[3] = 0xDD;
+	tiledBitstream[4] = 0xEE;
+	return 5;
+
 	int totalSize = 0;
 	int tbPos = 0;
 	int* bitstream_0Pos = (int*)malloc(sizeof(int));

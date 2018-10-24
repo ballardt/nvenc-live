@@ -313,6 +313,10 @@ int main(int argc, char* argv[]) {
 		tiledBitstreamSize = doStitching(tiledBitstream, bitstreams[HIGH_BITRATE],
 										 bitstreams[LOW_BITRATE], bitstreamSizes[HIGH_BITRATE],
 										 bitstreamSizes[LOW_BITRATE], tileBitrates);
+		for (int i=0; i<5; i++) {
+			printf("%02x ", tiledBitstream[i]);
+		}
+		printf("\n");
 		fwrite(tiledBitstream, sizeof(unsigned char), tiledBitstreamSize, outFile);
 	}
 
