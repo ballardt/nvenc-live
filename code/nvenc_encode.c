@@ -14,6 +14,7 @@
 #include "libpostproc/postprocess.h"
 
 #define NUM_SPLITS 3
+#define BITSTREAM_SIZE 50000
 
 static AVBufferRef* hwDeviceCtx = NULL;
 static enum AVPixelFormat hwPixFmt;
@@ -31,7 +32,8 @@ typedef enum bitrate {
 } Bitrate;
 int bitrateValues[] = {1600000, 800000};
 
-FILE* outFiles[] = {NULL, NULL};
+unsigned char* bitstreams[] = {NULL, NULL};
+unsigned char* tiledBitstream = NULL;
 
 /**
  * Get the next frame, consisting of a Y, U, and V component.
@@ -191,7 +193,7 @@ void initializeContext(Bitrate bitrate, int width, int height) {
 	frames[bitrate] = frame;
 }
 
-void sendFrameToNVENC(Bitrate bitrate, AVFrame* frame, FILE* file) {
+void sendFrameToNVENC(Bitrate bitrate, AVFrame* frame, unsigned char* bitstream) {
 	pkt->data = NULL;
 	pkt->size = 0;
 	// Send the frame
@@ -213,7 +215,8 @@ void sendFrameToNVENC(Bitrate bitrate, AVFrame* frame, FILE* file) {
 		}
 		// Get the data from the GPU
 		// Note: this never gets executed...
-		fwrite(pkt->data, 1, pkt->size, file);
+		memcpy(bitrate, pkt->data, pkt->size);
+		//fwrite(pkt->data, 1, pkt->size, file);
 		av_packet_unref(pkt);
 	}
 }
@@ -257,21 +260,19 @@ void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width
 	if (codecContextArr[0] == NULL) {
 		initializeHardware();
 	}
-	encodeFrameWithContext(outFiles[HIGH_BITRATE], y, u, v, width, height, HIGH_BITRATE);
-	encodeFrameWithContext(outFiles[LOW_BITRATE], y, u, v, width, height, LOW_BITRATE);
+	encodeFrameWithContext(bitstreams[HIGH_BITRATE], y, u, v, width, height, HIGH_BITRATE);
+	encodeFrameWithContext(bitstreams[LOW_BITRATE], y, u, v, width, height, LOW_BITRATE);
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
 	FILE* inFile = fopen("short_ms9390_3840x1472.yuv", "rb");
-	outFiles[HIGH_BITRATE] = fopen("yuvtest_high.hevc", "wb");
-	outFiles[LOW_BITRATE] = fopen("yuvtest_low.hevc", "wb");
+	FILE* outFile = fopen("stitched_ms9390.hevc", "wb");
+	bitstreams[HIGH_BITRATE] = (unsigned char)malloc(sizeof(unsigned char) * BITSTREAM_SIZE);
+	bitstreams[LOW_BITRATE] = (unsigned char)malloc(sizeof(unsigned char) * BITSTREAM_SIZE);
+	tiledBitstream = (unsigned char)malloc(sizeof(unsigned char) * BITSTREAM_SIZE);
 
 	if (inFile == NULL) {
 		printf("Error: could not open input file\n");
-		return 1;
-	}
-	if (outFiles[HIGH_BITRATE] == NULL || outFiles[LOW_BITRATE] == NULL) {
-		printf("Error: could not open output files\n");
 		return 1;
 	}
 
@@ -285,13 +286,19 @@ int main(int argc, char *argv[]) {
 	unsigned char* u = malloc(sizeof(unsigned char)*uvSize);
 	unsigned char* v = malloc(sizeof(unsigned char)*uvSize);
 
+	int tiledBitstreamSize;
+	int tileBitrates[] = {LOW_BITRATE, HIGH_BITRATE, LOW_BITRATE};
 	while (getNextFrame(inFile, y, u, v, ySize)) {
 		rearrangeFrame(&y, &u, &v, width, height);
 		encodeFrame(y, u, v, width/NUM_SPLITS, height*NUM_SPLITS);
+		// C++ function
+		tiledBitstreamSize = doStitching(tiledBitstream, bitstreams[HIGH_BITRATE],
+										 bitstreams[LOW_BITRATE], tileBitrates);
+		fwrite(tiledBitstream, sizeof(unsigned char), tiledBitstreamSize, outFile);
 	}
 
-	sendFrameToNVENC(HIGH_BITRATE, NULL, outFiles[HIGH_BITRATE]);
-    sendFrameToNVENC(LOW_BITRATE, NULL, outFiles[LOW_BITRATE]);
+	sendFrameToNVENC(HIGH_BITRATE, NULL, bitstreams[HIGH_BITRATE]);
+    sendFrameToNVENC(LOW_BITRATE, NULL, bitstreams[LOW_BITRATE]);
 	avcodec_free_context(&codecContextArr[HIGH_BITRATE]);
 	avcodec_free_context(&codecContextArr[LOW_BITRATE]);
 	av_frame_free(&frames[HIGH_BITRATE]);
@@ -302,7 +309,9 @@ int main(int argc, char *argv[]) {
 	free(y);
 	free(u);
 	free(v);
+	free(bitstreams[HIGH_BITRATE]);
+	free(bitstreams[LOW_BITRATE]);
+	free(tiledBitstream);
 	fclose(inFile);
-	fclose(outFiles[HIGH_BITRATE]);
-	fclose(outFiles[LOW_BITRATE]);
+	fclose(outFile);
 }
