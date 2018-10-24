@@ -1,4 +1,5 @@
 #include <fstream>
+#include <sstream>
 #include <iterator>
 #include <iostream>
 #include <vector>
@@ -6,7 +7,7 @@
 #include <math.h>
 #include <boost/dynamic_bitset.hpp>
 
-#include "kvazaar/src/link_stitcher.h"
+#include "link_stitcher.h"
 
 typedef unsigned char Block;
 typedef boost::dynamic_bitset<Block> Bitset;
@@ -14,6 +15,9 @@ typedef boost::dynamic_bitset<Block> Bitset;
 enum NALType {
 	P_SLICE = 0,
 	I_SLICE,
+	VPS,
+	SPS,
+	PPS,
 	SEI,
 	OTHER
 };
@@ -37,6 +41,15 @@ NALType getNALType(std::vector<Block>* nal) {
 		case 0x14:
 			nalType = I_SLICE;
 			break;
+		case 0x20:
+			nalType = VPS;
+			break;
+		case 0x21:
+			nalType = SPS;
+			break;
+		case 0x22:
+			nalType = PPS;
+			break;
 		case 0x27:
 		case 0x28:
 			nalType = SEI;
@@ -55,30 +68,34 @@ NALType getNALType(std::vector<Block>* nal) {
  *
  * Returns the NAL type, or -1 if there are no more NALs in the stream.
  */
-int getNextNAL(std::ifstream& ifs, std::vector<Block>* buf) {
+int getNextNAL(unsigned char* bytes, std::vector<Block>* buf, int* bytesPos, int bytesSize) {
 	// Go past the first border and consume it.
 	int zeroCounter = 0;
-	char c = 0xFF;
-	int bufIdx = 0;
+	unsigned char c = 0xFF;
 	while ((zeroCounter < 2 || (unsigned char)c != 0x01)
-		   && ifs.peek() != std::ifstream::traits_type::eof()) {
-		ifs.read(&c, 1);
+		   //&& ifs.peek() != std::ifstream::traits_type::eof()) {
+		   && *bytesPos < bytesSize) {
+		//ifs.read(&c, 1);
+		c = bytes[*bytesPos];
 		buf->push_back((unsigned char)c);
-		bufIdx++;
+		*bytesPos++;
 		if ((unsigned char)c == 0x00) {
 			zeroCounter++;
 		}
 	}
-	if (ifs.peek() == std::ifstream::traits_type::eof()) {
+	//if (ifs.peek() == std::ifstream::traits_type::eof()) {
+	if (*bytesPos == bytesSize) {
 		return -1;
 	}
 	// Stop when we encounter the next border. Do not consume it.
 	zeroCounter = 0;
 	while ((zeroCounter < 2 || (unsigned char)c != 0x01)
-		   && ifs.peek() != std::ifstream::traits_type::eof()) {
-		ifs.read(&c, 1);
+		   //&& ifs.peek() != std::ifstream::traits_type::eof()) {
+		   && *bytesPos < bytesSize) {
+		//ifs.read(&c, 1);
+		c = bytes[*bytesPos];
 		buf->push_back((unsigned char)c);
-		bufIdx++;
+		*bytesPos++;
 		if ((unsigned char)c == 0x00) {
 			zeroCounter++;
 		}
@@ -86,12 +103,14 @@ int getNextNAL(std::ifstream& ifs, std::vector<Block>* buf) {
 			zeroCounter = 0;
 		}
 	}
-	if (ifs.peek() == std::ifstream::traits_type::eof()) {
+	//if (ifs.peek() == std::ifstream::traits_type::eof()) {
+	if (*bytesPos == bytesSize) {
 		return -1;
 	}
-	ifs.putback((unsigned char) 0x01);
-	ifs.putback((unsigned char) 0x00);
-	ifs.putback((unsigned char) 0x00);
+	//ifs.putback((unsigned char) 0x01);
+	//ifs.putback((unsigned char) 0x00);
+	//ifs.putback((unsigned char) 0x00);
+	*bytesPos -= 3;
 	buf->pop_back();
 	buf->pop_back();
 	buf->pop_back();
@@ -397,17 +416,6 @@ void modifyISlice(std::vector<Block>* nal, bool isFirstSlice, int ctuOffset, int
 	Bitset newBits(0);
 	// Convert the NAL to some bits
 	nalToBitset(&oldBits, nal);
-	//for (int i=0; i<64; i++) {
-	//	printf("%02X ", (*nal)[i]);
-	//}
-	//printf("\n");
-	//for (int i=0; i<128; i++) {
-	//	if (i % 8 == 0) {
-	//		std::cout << " ";
-	//	}
-	//	std::cout << oldBits[i];
-	//}
-	//std::cout << std::endl << std::endl;
 	// Navigate to the right spot and make our changes
 	oldBitsPos += copyBits(&oldBits, &newBits, oldBitsPos, 42);
 	oldBitsPos += copyExpGolomb(&oldBits, &newBits, oldBitsPos);
@@ -451,41 +459,101 @@ void modifyPSlice(std::vector<Block>* nal, bool isFirstSlice, int ctuOffset, int
 	doneEditingNAL(nal, &newBits, &oldBits, oldBitsPos, false, true);
 }
 
-int doStitching() {
-	std::ifstream ifs_0("ms9390_0.hevc", std::ios::binary);
-	std::ifstream ifs_1("ms9390_1.hevc", std::ios::binary);
-	std::ofstream ofs("ms9390_stitched.hevc", std::ios::binary);
+//int doStitching() {
+//	std::ifstream ifs_0("ms9390_0.hevc", std::ios::binary);
+//	std::ifstream ifs_1("ms9390_1.hevc", std::ios::binary);
+//	std::ofstream ofs("ms9390_stitched.hevc", std::ios::binary);
+//	std::vector<Block> nal;
+//
+//	// VPS
+//	getNextNAL(ifs_0, &nal);
+//	ofs.write((char*)&nal[0], nal.size());
+//	nal.clear();
+//	// SPS
+//	getNextNAL(ifs_0, &nal);
+//	modifySPS(&nal);
+//	ofs.write((char*)&nal[0], nal.size());
+//	nal.clear();
+//	// PPS
+//	getNextNAL(ifs_0, &nal);
+//	modifyPPS(&nal);
+//	ofs.write((char*)&nal[0], nal.size());
+//	nal.clear();
+//	// SEI
+//	getNextNAL(ifs_0, &nal);
+//	ofs.write((char*)&nal[0], nal.size());
+//	nal.clear();
+//	// Discard the ones from the other ifs
+//	getNextNAL(ifs_1, &nal);
+//	nal.clear();
+//	getNextNAL(ifs_1, &nal);
+//	nal.clear();
+//	getNextNAL(ifs_1, &nal);
+//	nal.clear();
+//	getNextNAL(ifs_1, &nal);
+//	nal.clear();
+//	// Remainder
+//	int nalType = 0;
+//	const int oldCtuOffsetBitSize = ceil(log2((1280/32)*(4416/32)));
+//	const int newCtuOffsetBitSize = ceil(log2((3840/32)*(1472/32)));
+//	const int sliceSegAddrs[] = {0, 40, 80}; // 0 not used, but convenient for index
+//	for (int i=1; i<3; i++) {
+//		ctuOffsetBits.insert({sliceSegAddrs[i], Bitset(newCtuOffsetBitSize, sliceSegAddrs[i])});
+//	}
+//	int i = 0;
+//	int ifs_idx = -1;
+//	while (true) {
+//		for (int ifs_idx=0; ifs_idx<2; ifs_idx++) {
+//			nalType = getNextNAL((ifs_idx == 0 ? ifs_0 : ifs_1), &nal);
+//			// Low qual on left and right, high in middle
+//			switch (nalType) {
+//				case P_SLICE:
+//					if ((i==0 && ifs_idx==1) || (i==1 && ifs_idx==0) || (i==2 && ifs_idx==1)) {
+//						modifyPSlice(&nal, (i==0), sliceSegAddrs[i], oldCtuOffsetBitSize, newCtuOffsetBitSize);
+//						ofs.write((char*)&nal[0], nal.size());
+//					}
+//					if (ifs_idx == 1) i++;
+//					break;
+//				case I_SLICE:
+//					// TODO
+//					if ((i==0 && ifs_idx==1) || (i==1 && ifs_idx==0) || (i==2 && ifs_idx==1)) {
+//						modifyISlice(&nal, (i==0), sliceSegAddrs[i], oldCtuOffsetBitSize, newCtuOffsetBitSize);
+//						ofs.write((char*)&nal[0], nal.size());
+//					}
+//					if (ifs_idx == 1) i++;
+//					break;
+//				case SEI:
+//					if (ifs_idx==0) {
+//						ofs.write((char*)&nal[0], nal.size());
+//					}
+//					if (ifs_idx == 1) i = 0;
+//					break;
+//				case OTHER:
+//					break;
+//				case -1:
+//					goto done;
+//			}
+//			nal.clear();
+//		}
+//	}
+// done:
+//	ifs_0.close();
+//	ifs_1.close();
+//	ofs.close();
+//
+//	return 0;
+//}
+
+extern "C" int doStitching(unsigned char* tiledBitstream, unsigned char* bitstream_0,
+						   unsigned char* bitstream_1, int bitstream_0Size, int bitstream_1Size,
+						   int* tileBitrates) {
+	int totalSize = 0;
+	int tbPos = 0;
+	int* bytesPos;
+	*bytesPos = 0;
 	std::vector<Block> nal;
 
-	// VPS
-	getNextNAL(ifs_0, &nal);
-	ofs.write((char*)&nal[0], nal.size());
-	nal.clear();
-	// SPS
-	getNextNAL(ifs_0, &nal);
-	modifySPS(&nal);
-	ofs.write((char*)&nal[0], nal.size());
-	nal.clear();
-	// PPS
-	getNextNAL(ifs_0, &nal);
-	modifyPPS(&nal);
-	ofs.write((char*)&nal[0], nal.size());
-	nal.clear();
-	// SEI
-	getNextNAL(ifs_0, &nal);
-	ofs.write((char*)&nal[0], nal.size());
-	nal.clear();
-	// Discard the ones from the other ifs
-	getNextNAL(ifs_1, &nal);
-	nal.clear();
-	getNextNAL(ifs_1, &nal);
-	nal.clear();
-	getNextNAL(ifs_1, &nal);
-	nal.clear();
-	getNextNAL(ifs_1, &nal);
-	nal.clear();
-	// Remainder
-	int nalType = 0;
+	// Get as many NALs as we have in the stream
 	const int oldCtuOffsetBitSize = ceil(log2((1280/32)*(4416/32)));
 	const int newCtuOffsetBitSize = ceil(log2((3840/32)*(1472/32)));
 	const int sliceSegAddrs[] = {0, 40, 80}; // 0 not used, but convenient for index
@@ -493,30 +561,44 @@ int doStitching() {
 		ctuOffsetBits.insert({sliceSegAddrs[i], Bitset(newCtuOffsetBitSize, sliceSegAddrs[i])});
 	}
 	int i = 0;
+	int nalSize;
+	int nalType;
 	int ifs_idx = -1;
 	while (true) {
 		for (int ifs_idx=0; ifs_idx<2; ifs_idx++) {
-			nalType = getNextNAL((ifs_idx == 0 ? ifs_0 : ifs_1), &nal);
+			// TODO nal is a vector, can do nalSize instead
+			nalType = getNextNAL((ifs_idx == 0 ? bitstream_0 : bitstream_1), &nal);
 			// Low qual on left and right, high in middle
 			switch (nalType) {
 				case P_SLICE:
-					if ((i==0 && ifs_idx==1) || (i==1 && ifs_idx==0) || (i==2 && ifs_idx==1)) {
-						modifyPSlice(&nal, (i==0), sliceSegAddrs[i], oldCtuOffsetBitSize, newCtuOffsetBitSize);
-						ofs.write((char*)&nal[0], nal.size());
+					if (tileBitrates[i] == ifs_idx) {
+						modifyPSlice(&nal, (i==0), sliceSegAddrs[i], oldCtuOffsetBitSize,
+									 newCtuOffsetBitSize);
+						//ofs.write((char*)&nal[0], nal.size());
+						memcpy(tileBitset+totalSize, nal.begin(), nal.size());
+						totalSize += nalSize;
 					}
 					if (ifs_idx == 1) i++;
 					break;
 				case I_SLICE:
 					// TODO
 					if ((i==0 && ifs_idx==1) || (i==1 && ifs_idx==0) || (i==2 && ifs_idx==1)) {
-						modifyISlice(&nal, (i==0), sliceSegAddrs[i], oldCtuOffsetBitSize, newCtuOffsetBitSize);
-						ofs.write((char*)&nal[0], nal.size());
+						modifyISlice(&nal, (i==0), sliceSegAddrs[i], oldCtuOffsetBitSize,
+									 newCtuOffsetBitSize);
+						//ofs.write((char*)&nal[0], nal.size());
+						memcpy(tileBitset+totalSize, nal.begin(), nal.size());
+						totalSize += nalSize;
 					}
 					if (ifs_idx == 1) i++;
 					break;
+				case VPS:
+				case SPS:
+				case PPS:
 				case SEI:
 					if (ifs_idx==0) {
-						ofs.write((char*)&nal[0], nal.size());
+						//ofs.write((char*)&nal[0], nal.size());
+						memcpy(tileBitset+totalSize, nal.begin(), nal.size());
+						totalSize += nalSize;
 					}
 					if (ifs_idx == 1) i = 0;
 					break;
@@ -529,19 +611,15 @@ int doStitching() {
 		}
 	}
  done:
-	ifs_0.close();
-	ifs_1.close();
-	ofs.close();
-
-	return 0;
+	return totalSize;
 }
 
-extern "C" int cpp_test(int i) {
-	printf("Testing!\n");
-	printf("Here's i: %d\n", i);
-	return 5;
-}
-
-int main(int, char*[]) {
-	return doStitching();
-}
+//extern "C" int cpp_test(int i) {
+//	printf("Testing!\n");
+//	printf("Here's i: %d\n", i);
+//	return 5;
+//}
+//
+//int main(int, char*[]) {
+//	return doStitching();
+//}

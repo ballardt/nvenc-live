@@ -13,6 +13,8 @@
 #include "libswscale/swscale.h"
 #include "libpostproc/postprocess.h"
 
+#include "link_stitcher.h"
+
 #define NUM_SPLITS 3
 #define BITSTREAM_SIZE 50000
 
@@ -216,8 +218,10 @@ void sendFrameToNVENC(Bitrate bitrate, AVFrame* frame, unsigned char* bitstream)
 		// Get the data from the GPU
 		// Note: this never gets executed...
 		memcpy(bitrate, pkt->data, pkt->size);
+		int pktSize = pkt->size;
 		//fwrite(pkt->data, 1, pkt->size, file);
 		av_packet_unref(pkt);
+		return pktSize;
 	}
 }
 
@@ -226,7 +230,8 @@ void sendFrameToNVENC(Bitrate bitrate, AVFrame* frame, unsigned char* bitstream)
  * or low quality.
  */
 void encodeFrameWithContext(FILE* file, unsigned char* y, unsigned char* u,
-							unsigned char* v, int yWidth, int yHeight, Bitrate bitrate) {
+							unsigned char* v, int yWidth, int yHeight, Bitrate bitrate,
+							int* bitstreamSize) {
 	if (codecContextArr[bitrate] == NULL) {
 		initializeContext(bitrate, yWidth, yHeight);
 	}
@@ -249,23 +254,25 @@ void encodeFrameWithContext(FILE* file, unsigned char* y, unsigned char* u,
 	// Encode the image
 	frame->pts = 0;//frame_num; // TODO this is always 0?
 	//encoder_encode_nvenc(c, frame, pkt, outfile);
-	sendFrameToNVENC(bitrate, frame, file);
+	*bitstreamSize = sendFrameToNVENC(bitrate, frame, file);
 }
 
 /**
  * Encode a frame twice, once at a high bitrate and once at a low one.
  */
 void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width,
-				 int height) {
+				 int height, int bitstreamSizes[2]) {
 	if (codecContextArr[0] == NULL) {
 		initializeHardware();
 	}
-	encodeFrameWithContext(bitstreams[HIGH_BITRATE], y, u, v, width, height, HIGH_BITRATE);
-	encodeFrameWithContext(bitstreams[LOW_BITRATE], y, u, v, width, height, LOW_BITRATE);
+	encodeFrameWithContext(bitstreams[HIGH_BITRATE], y, u, v, width, height, HIGH_BITRATE,
+						   &bitstreamSizes[HIGH_BITRATE]);
+	encodeFrameWithContext(bitstreams[LOW_BITRATE], y, u, v, width, height, LOW_BITRATE,
+						   &bitstreamSizes[LOW_BITRATE]);
 }
 
 int main(int argc, char* argv[]) {
-	FILE* inFile = fopen("short_ms9390_3840x1472.yuv", "rb");
+	FILE* inFile = fopen("../../short_ms9390_3840x1472.yuv", "rb");
 	FILE* outFile = fopen("stitched_ms9390.hevc", "wb");
 	bitstreams[HIGH_BITRATE] = (unsigned char)malloc(sizeof(unsigned char) * BITSTREAM_SIZE);
 	bitstreams[LOW_BITRATE] = (unsigned char)malloc(sizeof(unsigned char) * BITSTREAM_SIZE);
@@ -286,11 +293,14 @@ int main(int argc, char* argv[]) {
 	unsigned char* u = malloc(sizeof(unsigned char)*uvSize);
 	unsigned char* v = malloc(sizeof(unsigned char)*uvSize);
 
+	int bitstreamSizes[2];
 	int tiledBitstreamSize;
 	int tileBitrates[] = {LOW_BITRATE, HIGH_BITRATE, LOW_BITRATE};
 	while (getNextFrame(inFile, y, u, v, ySize)) {
+		bitstreamSizes[0] = 0;
+		bitstreamSizes[1] = 0;
 		rearrangeFrame(&y, &u, &v, width, height);
-		encodeFrame(y, u, v, width/NUM_SPLITS, height*NUM_SPLITS);
+		encodeFrame(y, u, v, width/NUM_SPLITS, height*NUM_SPLITS, bitstreamSizes);
 		// C++ function
 		tiledBitstreamSize = doStitching(tiledBitstream, bitstreams[HIGH_BITRATE],
 										 bitstreams[LOW_BITRATE], tileBitrates);
