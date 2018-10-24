@@ -6,6 +6,8 @@
 #include <math.h>
 #include <boost/dynamic_bitset.hpp>
 
+#include "kvazaar/src/link_stitcher.h"
+
 typedef unsigned char Block;
 typedef boost::dynamic_bitset<Block> Bitset;
 
@@ -172,6 +174,7 @@ void nalToBitset(Bitset* bits, std::vector<Block>* nal) {
 }
 
 void bitsetToNAL(std::vector<Block>* nal, Bitset* bits) {
+
 	// Reverse the order of each byte again for writing out
 	Bitset tempBits(9);
 	for (int i=0; i<bits->size()/8; i++) {
@@ -448,10 +451,10 @@ void modifyPSlice(std::vector<Block>* nal, bool isFirstSlice, int ctuOffset, int
 	doneEditingNAL(nal, &newBits, &oldBits, oldBitsPos, false, true);
 }
 
-int main(int, char*[]) {
-	std::ifstream ifs_0("../../videos/ms9390_0.hevc", std::ios::binary);
-	std::ifstream ifs_1("../../videos/ms9390_1.hevc", std::ios::binary);
-	std::ofstream ofs("test.hevc", std::ios::binary);
+int doStitching() {
+	std::ifstream ifs_0("ms9390_0.hevc", std::ios::binary);
+	std::ifstream ifs_1("ms9390_1.hevc", std::ios::binary);
+	std::ofstream ofs("ms9390_stitched.hevc", std::ios::binary);
 	std::vector<Block> nal;
 
 	// VPS
@@ -504,6 +507,7 @@ int main(int, char*[]) {
 					if (ifs_idx == 1) i++;
 					break;
 				case I_SLICE:
+					// TODO
 					if ((i==0 && ifs_idx==1) || (i==1 && ifs_idx==0) || (i==2 && ifs_idx==1)) {
 						modifyISlice(&nal, (i==0), sliceSegAddrs[i], oldCtuOffsetBitSize, newCtuOffsetBitSize);
 						ofs.write((char*)&nal[0], nal.size());
@@ -528,4 +532,16 @@ int main(int, char*[]) {
 	ifs_0.close();
 	ifs_1.close();
 	ofs.close();
+
+	return 0;
+}
+
+extern "C" int cpp_test(int i) {
+	printf("Testing!\n");
+	printf("Here's i: %d\n", i);
+	return 5;
+}
+
+int main(int, char*[]) {
+	return doStitching();
 }
