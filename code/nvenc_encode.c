@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <getopt.h>
 
 #include "libavutil/common.h"
 #include "libavcodec/avcodec.h"
@@ -15,7 +16,7 @@
 
 #include "link_stitcher.h"
 
-#define NUM_SPLITS 3
+#define NUM_SPLITS 3 // TODO replace with numTileCols; they're equivalent
 #define BITSTREAM_SIZE 100000
 
 static AVBufferRef* hwDeviceCtx = NULL;
@@ -32,7 +33,20 @@ typedef enum bitrate {
 	HIGH_BITRATE = 0,
 	LOW_BITRATE
 } Bitrate;
-int bitrateValues[] = {1600000, 800000};
+int bitrateValues[2];
+
+typedef struct {
+	char* inputFilename;
+	char* outputFilename;
+	int width;
+	int height;
+	double fps; // TODO
+	int highBitrate;
+	int lowBitrate;
+	int numTileCols; // TODO
+	int numTileRows; // TODO
+	char* tileBitratesFilename; // TODO
+} Config;
 
 /**
  * Get the next frame, consisting of a Y, U, and V component.
@@ -278,42 +292,124 @@ void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width
 						   &bitstreamSizes[LOW_BITRATE]);
 }
 
-int main(int argc, char* argv[]) {
-	FILE* inFile = fopen("../../short_ms9390_3840x1472.yuv", "rb");
-	FILE* outFile = fopen("stitched_ms9390.hevc", "wb");
-	bitstreams[HIGH_BITRATE] = (unsigned char*)malloc(sizeof(unsigned char) * BITSTREAM_SIZE);
-	bitstreams[LOW_BITRATE] = (unsigned char*)malloc(sizeof(unsigned char) * BITSTREAM_SIZE);
-	tiledBitstream = (unsigned char*)malloc(sizeof(unsigned char) * BITSTREAM_SIZE);
+/**
+ * Process the command-line arguments to configure the program
+ */
+void processInput(Config* config, int argc, char* argv[]) {
+	// Default config options
+	config->highBitrate = 1600000;
+	config->lowBitrate = 800000;
+	config->numTileCols = 3;
+	config->numTileRows = 1;
+	config->inputFilename = NULL;
+	config->outputFilename = NULL;
+	config->width = -1;
+	config->height = -1;
+	config->fps = -1;
+	config->tileBitratesFilename = NULL;
+	// Read input
+	static struct option long_options[] = {
+		{"input", required_argument, 0, 'i'},
+		{"output", required_argument, 0, 'o'},
+		{"width", required_argument, 0, 'x'},
+		{"height", required_argument, 0, 'y'},
+		{"fps", required_argument, 0, 'f'},
+		{"high-bitrate", required_argument, 0, 'h'},
+		{"low-bitrate", required_argument, 0, 'l'},
+		{"num-tile-rows", required_argument, 0, 'r'},
+		{"num-tile-cols", required_argument, 0, 'c'},
+		{"tile-bitrates-file", required_argument, 0, 't'},
+		{0, 0, 0, 0}
+	};
+	int opt;
+	int option_index = 0;
+	while ((opt = getopt_long(argc, argv, "i:o:x:y:f:r:c:t:h:l:", long_options, NULL)) != -1) {
+		switch (opt) {
+			case 'i':
+				config->inputFilename = optarg;
+				break;
+			case 'o':
+				config->outputFilename = optarg;
+				break;
+			case 'x':
+				config->width = atoi(optarg);
+				break;
+			case 'y':
+				config->height = atoi(optarg);
+				break;
+			case 'f':
+				config->fps = atof(optarg);
+				break;
+			case 'h':
+				config->highBitrate = atoi(optarg);
+				break;
+			case 'l':
+				config->lowBitrate = atoi(optarg);
+				break;
+			case 'r':
+				config->numTileRows = atoi(optarg);
+				break;
+			case 'c':
+				config->numTileCols = atoi(optarg);
+				break;
+			case 't':
+				config->tileBitratesFilename = optarg;
+				break;
+		}
+	}
+	// Ensure there are no missing parameters
+	if (config->inputFilename == NULL ||
+		config->outputFilename == NULL ||
+		config->width == -1 ||
+		config->height == -1 ||
+		config->fps == -1 ||
+		config->tileBitratesFilename == NULL) {
+		printf("Error: invalid command line parameters. Aborting.\n");
+		exit(1);
+	}
+}
 
+int main(int argc, char* argv[]) {
+	// Process our inputs, set up our data structures
+	Config* config = (Config*)malloc(sizeof(Config));
+	processInput(config, argc, argv);
+	FILE* inFile = fopen(config->inputFilename, "rb");
 	if (inFile == NULL) {
 		printf("Error: could not open input file\n");
 		return 1;
 	}
-
-	int width = 3840;
-	int height = 1472;
-
-	int ySize = (width*height);
-	int uvSize = ySize/4;
-
-	unsigned char* y = malloc(sizeof(unsigned char)*ySize);
-	unsigned char* u = malloc(sizeof(unsigned char)*uvSize);
-	unsigned char* v = malloc(sizeof(unsigned char)*uvSize);
-
+	FILE* outFile = fopen(config->outputFilename, "wb");
+	if (outFile == NULL) {
+		printf("Error: could not open output file\n");
+		return 1;
+	}
+	bitrateValues[HIGH_BITRATE] = config->highBitrate;
+	bitrateValues[LOW_BITRATE] = config->lowBitrate;
+	int ySize = config->width * config->height;
+	int uvSize = ySize / 4;
 	int bitstreamSizes[2];
 	int tiledBitstreamSize;
 	int tileBitrates[] = {LOW_BITRATE, HIGH_BITRATE, LOW_BITRATE};
+	unsigned char* y = malloc(sizeof(unsigned char)*ySize);
+	unsigned char* u = malloc(sizeof(unsigned char)*uvSize);
+	unsigned char* v = malloc(sizeof(unsigned char)*uvSize);
+	bitstreams[HIGH_BITRATE] = (unsigned char*)malloc(sizeof(unsigned char) * BITSTREAM_SIZE);
+	bitstreams[LOW_BITRATE] = (unsigned char*)malloc(sizeof(unsigned char) * BITSTREAM_SIZE);
+	tiledBitstream = (unsigned char*)malloc(sizeof(unsigned char) * BITSTREAM_SIZE);
+
+	// The main loop. Get a frame, rearrange it, send it to NVENC, stitch it, then write it out.
 	while (getNextFrame(inFile, y, u, v, ySize)) {
 		bitstreamSizes[HIGH_BITRATE] = 0;
 		bitstreamSizes[LOW_BITRATE] = 0;
-		rearrangeFrame(&y, &u, &v, width, height);
-		encodeFrame(y, u, v, width/NUM_SPLITS, height*NUM_SPLITS, bitstreamSizes);
+		rearrangeFrame(&y, &u, &v, config->width, config->height);
+		encodeFrame(y, u, v, config->width/NUM_SPLITS, config->height*NUM_SPLITS, bitstreamSizes);
 		tiledBitstreamSize = doStitching(tiledBitstream, bitstreams[HIGH_BITRATE],
 										 bitstreams[LOW_BITRATE], bitstreamSizes[HIGH_BITRATE],
 										 bitstreamSizes[LOW_BITRATE], tileBitrates);
 		fwrite(tiledBitstream, sizeof(unsigned char), tiledBitstreamSize, outFile);
 	}
 
+	// Wrap up
 	sendFrameToNVENC(HIGH_BITRATE, NULL, bitstreams[HIGH_BITRATE]);
     sendFrameToNVENC(LOW_BITRATE, NULL, bitstreams[LOW_BITRATE]);
 	avcodec_free_context(&codecContextArr[HIGH_BITRATE]);
@@ -322,7 +418,6 @@ int main(int argc, char* argv[]) {
 	av_frame_free(&frames[LOW_BITRATE]);
 	av_packet_free(&pkt);
 	av_buffer_unref(&hwDeviceCtx);
-
 	free(y);
 	free(u);
 	free(v);
