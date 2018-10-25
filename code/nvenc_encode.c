@@ -407,7 +407,7 @@ int main(int argc, char* argv[]) {
 		tiledBitstreamSize = doStitching(tiledBitstream, bitstreams[HIGH_BITRATE],
 										 bitstreams[LOW_BITRATE], bitstreamSizes[HIGH_BITRATE],
 										 bitstreamSizes[LOW_BITRATE], tileBitrates, config->width,
-										 config->height);
+										 config->height, config->numTileRows, config->numTileCols);
 		fwrite(tiledBitstream, sizeof(unsigned char), tiledBitstreamSize, outFile);
 	}
 

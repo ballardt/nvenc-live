@@ -361,10 +361,8 @@ void modifySPS(std::vector<Block>* nal, int width, int height) {
 }
 
 // Enable tiles and insert the tile-related fields
-void modifyPPS(std::vector<Block>* nal) {
+void modifyPPS(std::vector<Block>* nal, int numTileCols, int numTileRows) {
 	// TODO these should be passed into the function
-	const int NUM_TILE_COLS = 3;
-	const int NUM_TILE_ROWS = 2;
 	int oldBitsPos = 0;
 	Bitset oldBits(nal->size()*8);
 	Bitset newBits(0);
@@ -388,8 +386,8 @@ void modifyPPS(std::vector<Block>* nal) {
 	newBits.push_back(1);
 	oldBitsPos += copyBits(&oldBits, &newBits, oldBitsPos, 1);
 	// Insert tile info (num tile cols, num tile rows, 2 flags)
-	writeUnsExpGolomb(&newBits, NUM_TILE_COLS-1);
-	writeUnsExpGolomb(&newBits, NUM_TILE_ROWS-1);
+	writeUnsExpGolomb(&newBits, numTileCols-1);
+	writeUnsExpGolomb(&newBits, numTileRows-1);
 	newBits.push_back(1);
 	newBits.push_back(0);
 	// Finalize
@@ -455,7 +453,8 @@ void modifyPSlice(std::vector<Block>* nal, bool isFirstSlice, int ctuOffset, int
 
 extern "C" int doStitching(unsigned char* tiledBitstream, unsigned char* bitstream_0,
 						   unsigned char* bitstream_1, int bitstream_0Size, int bitstream_1Size,
-						   int* tileBitrates, int finalWidth, int finalHeight) {
+						   int* tileBitrates, int finalWidth, int finalHeight, int numTileRows,
+						   int numTileCols) {
 	int totalSize = 0;
 	int tbPos = 0;
 	int* bitstream_0Pos = (int*)malloc(sizeof(int));
@@ -465,14 +464,22 @@ extern "C" int doStitching(unsigned char* tiledBitstream, unsigned char* bitstre
 	std::vector<Block> nal;
 
 	// Get as many NALs as we have in the stream
-	// TODO 6 is numTileCols?
-	const int oldCtuOffsetBitSize = ceil(log2(((finalWidth/3)/32)*((finalHeight*3)/32)));
+	const int oldCtuOffsetBitSize = ceil(log2(((finalWidth/numTileCols)/32)*((finalHeight*numTileCols)/32)));
 	const int newCtuOffsetBitSize = ceil(log2((finalWidth/32)*(finalHeight/32)));
 	// TODO based on num tiles and layout
-	//const int sliceSegAddrs[] = {0, 40, 80, 3840, 3880, 3920}; // 0 not used, but convenient for index
-	const int sliceSegAddrs[] = {0, 3840, 40, 3880, 80, 3920}; // 0 not used, but convenient for index
-	// TODO 6 is numTiles?
-	for (int i=0; i<6; i++) {
+	int numTiles = numTileRows * numTileCols;
+	int imgCtuWidth = finalWidth / 32;
+	int tileCtuHeight = (finalHeight / 32) / numTileRows;
+	int tileCtuWidth = imgCtuWidth / numTileCols;
+	int tileIdx;
+	int sliceSegAddrs[numTiles]; // 0 not used, but convenient for index
+	for (int col=0; col<numTileCols; col++) {
+		for (int row=0; row<numTileRows; row++) {
+			tileIdx = (numTileRows * col) + row;
+			sliceSegAddrs[tileIdx] = (row * imgCtuWidth * tileCtuHeight) + (col * tileCtuWidth);
+		}
+	}
+	for (int i=0; i<numTiles; i++) {
 		ctuOffsetBits.insert({sliceSegAddrs[i], Bitset(newCtuOffsetBitSize, sliceSegAddrs[i])});
 	}
 	int i = 0;
@@ -512,7 +519,7 @@ extern "C" int doStitching(unsigned char* tiledBitstream, unsigned char* bitstre
 					break;
 				case PPS:
 					if (ifs_idx==0) {
-						modifyPPS(&nal);
+						modifyPPS(&nal, numTileCols, numTileRows);
 						std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
 						totalSize += nal.size();
 					}
