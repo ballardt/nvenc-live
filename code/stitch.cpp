@@ -364,7 +364,7 @@ void modifySPS(std::vector<Block>* nal, int width, int height) {
 void modifyPPS(std::vector<Block>* nal) {
 	// TODO these should be passed into the function
 	const int NUM_TILE_COLS = 3;
-	const int NUM_TILE_ROWS = 1;
+	const int NUM_TILE_ROWS = 2;
 	int oldBitsPos = 0;
 	Bitset oldBits(nal->size()*8);
 	Bitset newBits(0);
@@ -465,13 +465,14 @@ extern "C" int doStitching(unsigned char* tiledBitstream, unsigned char* bitstre
 	std::vector<Block> nal;
 
 	// Get as many NALs as we have in the stream
-	// TODO 3 is numTileCols?
+	// TODO 6 is numTileCols?
 	const int oldCtuOffsetBitSize = ceil(log2(((finalWidth/3)/32)*((finalHeight*3)/32)));
 	const int newCtuOffsetBitSize = ceil(log2((finalWidth/32)*(finalHeight/32)));
 	// TODO based on num tiles and layout
-	const int sliceSegAddrs[] = {0, 40, 80}; // 0 not used, but convenient for index
-	// TODO 3 is numTiles?
-	for (int i=1; i<3; i++) {
+	//const int sliceSegAddrs[] = {0, 40, 80, 3840, 3880, 3920}; // 0 not used, but convenient for index
+	const int sliceSegAddrs[] = {0, 3840, 40, 3880, 80, 3920}; // 0 not used, but convenient for index
+	// TODO 6 is numTiles?
+	for (int i=0; i<6; i++) {
 		ctuOffsetBits.insert({sliceSegAddrs[i], Bitset(newCtuOffsetBitSize, sliceSegAddrs[i])});
 	}
 	int i = 0;

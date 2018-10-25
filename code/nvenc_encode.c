@@ -389,7 +389,8 @@ int main(int argc, char* argv[]) {
 	int uvSize = ySize / 4;
 	int bitstreamSizes[2];
 	int tiledBitstreamSize;
-	int tileBitrates[] = {LOW_BITRATE, HIGH_BITRATE, LOW_BITRATE};
+	int tileBitrates[] = {LOW_BITRATE, HIGH_BITRATE, LOW_BITRATE, HIGH_BITRATE, LOW_BITRATE,
+						  HIGH_BITRATE};
 	unsigned char* y = malloc(sizeof(unsigned char)*ySize);
 	unsigned char* u = malloc(sizeof(unsigned char)*uvSize);
 	unsigned char* v = malloc(sizeof(unsigned char)*uvSize);
