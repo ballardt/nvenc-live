@@ -405,7 +405,8 @@ int main(int argc, char* argv[]) {
 		encodeFrame(y, u, v, config->width/NUM_SPLITS, config->height*NUM_SPLITS, bitstreamSizes);
 		tiledBitstreamSize = doStitching(tiledBitstream, bitstreams[HIGH_BITRATE],
 										 bitstreams[LOW_BITRATE], bitstreamSizes[HIGH_BITRATE],
-										 bitstreamSizes[LOW_BITRATE], tileBitrates);
+										 bitstreamSizes[LOW_BITRATE], tileBitrates, config->width,
+										 config->height);
 		fwrite(tiledBitstream, sizeof(unsigned char), tiledBitstreamSize, outFile);
 	}
 

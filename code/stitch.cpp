@@ -341,7 +341,7 @@ void doneEditingNAL(std::vector<Block>* nal, Bitset* newBits, Bitset* oldBits, i
 }
 
 // Change pic width/height
-void modifySPS(std::vector<Block>* nal) {
+void modifySPS(std::vector<Block>* nal, int width, int height) {
 	int oldBitsPos = 0;
 	Bitset oldBits(nal->size()*8);
 	Bitset newBits(0);
@@ -354,14 +354,15 @@ void modifySPS(std::vector<Block>* nal) {
 	// Consume old values for width/height, insert new ones
 	oldBitsPos += copyExpGolomb(&oldBits, NULL, oldBitsPos);
 	oldBitsPos += copyExpGolomb(&oldBits, NULL, oldBitsPos);
-	writeUnsExpGolomb(&newBits, 3840);
-	writeUnsExpGolomb(&newBits, 1472);
+	writeUnsExpGolomb(&newBits, width);
+	writeUnsExpGolomb(&newBits, height);
 	// Finalize
 	doneEditingNAL(nal, &newBits, &oldBits, oldBitsPos, true, false);
 }
 
 // Enable tiles and insert the tile-related fields
 void modifyPPS(std::vector<Block>* nal) {
+	// TODO these should be passed into the function
 	const int NUM_TILE_COLS = 3;
 	const int NUM_TILE_ROWS = 1;
 	int oldBitsPos = 0;
@@ -395,9 +396,6 @@ void modifyPPS(std::vector<Block>* nal) {
 	doneEditingNAL(nal, &newBits, &oldBits, oldBitsPos, true, false);
 }
 
-// TODO this is very slow, make it so we aren't creating a new bitset with each I slice
-// Idea: since we know what the ctus are beforehand, just create like 2 cutOffsetBits globals
-// and refer to them here based on ctuOffset. Maybe with like a map or something.
 void writeCtuOffset(Bitset* bits, unsigned int ctuOffset, int ctuOffsetBitSize) {
 	for (int i=0; i<ctuOffsetBitSize; i++) {
 		bits->push_back(ctuOffsetBits[ctuOffset][ctuOffsetBitSize-i-1]);
@@ -457,7 +455,7 @@ void modifyPSlice(std::vector<Block>* nal, bool isFirstSlice, int ctuOffset, int
 
 extern "C" int doStitching(unsigned char* tiledBitstream, unsigned char* bitstream_0,
 						   unsigned char* bitstream_1, int bitstream_0Size, int bitstream_1Size,
-						   int* tileBitrates) {
+						   int* tileBitrates, int finalWidth, int finalHeight) {
 	int totalSize = 0;
 	int tbPos = 0;
 	int* bitstream_0Pos = (int*)malloc(sizeof(int));
@@ -467,9 +465,12 @@ extern "C" int doStitching(unsigned char* tiledBitstream, unsigned char* bitstre
 	std::vector<Block> nal;
 
 	// Get as many NALs as we have in the stream
-	const int oldCtuOffsetBitSize = ceil(log2((1280/32)*(4416/32)));
-	const int newCtuOffsetBitSize = ceil(log2((3840/32)*(1472/32)));
+	// TODO 3 is numTileCols?
+	const int oldCtuOffsetBitSize = ceil(log2(((finalWidth/3)/32)*((finalHeight*3)/32)));
+	const int newCtuOffsetBitSize = ceil(log2((finalWidth/32)*(finalHeight/32)));
+	// TODO based on num tiles and layout
 	const int sliceSegAddrs[] = {0, 40, 80}; // 0 not used, but convenient for index
+	// TODO 3 is numTiles?
 	for (int i=1; i<3; i++) {
 		ctuOffsetBits.insert({sliceSegAddrs[i], Bitset(newCtuOffsetBitSize, sliceSegAddrs[i])});
 	}
@@ -503,7 +504,7 @@ extern "C" int doStitching(unsigned char* tiledBitstream, unsigned char* bitstre
 					break;
 				case SPS:
 					if (ifs_idx==0) {
-						modifySPS(&nal);
+						modifySPS(&nal, finalWidth, finalHeight);
 						std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
 						totalSize += nal.size();
 					}
