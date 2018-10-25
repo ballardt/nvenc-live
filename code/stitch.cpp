@@ -40,15 +40,6 @@ NALType getNALType(std::vector<Block>* nal) {
 		i++;
 	}
 	unsigned char typeBits = (*nal)[typeBitsOffset] >> 1;
-	printf("Start of nal in getNALType: ");
-	for (int i=0; i<10; i++) {
-		printf("%02X ", (*nal)[i]);
-	}
-	printf("\nEnd of nal in getNALType: ");
-	for (int i=nal->size()-10; i<nal->size(); i++) {
-		printf("%02X ", (*nal)[i]);
-	}
-	printf("\ntypeBits: %02X\n", typeBits);
 	switch (typeBits) {
 		case 0x00:
 		case 0x01:
@@ -86,7 +77,6 @@ NALType getNALType(std::vector<Block>* nal) {
  * Returns the NAL type, or -1 if there are no more NALs in the stream.
  */
 int getNextNAL(unsigned char* bytes, std::vector<Block>* buf, int* bytesPos, int bytesSize) {
-	printf("bytesPos: %d, bytesSize: %d\n", *bytesPos, bytesSize);
 	if (*bytesPos >= bytesSize) {
 		return -1;
 	}
@@ -94,25 +84,17 @@ int getNextNAL(unsigned char* bytes, std::vector<Block>* buf, int* bytesPos, int
 	int zeroCounter = 0;
 	unsigned char c = 0xFF;
 	while ((zeroCounter < 2 || c != 0x01) && *bytesPos < bytesSize) {
-		//ifs.read(&c, 1);
 		c = bytes[*bytesPos];
-		//printf("%02X ", c);
 		buf->push_back(c);
 		(*bytesPos)++;
 		if (c == 0x00) {
 			zeroCounter++;
 		}
 	}
-	printf("\n");
-	//if (ifs.peek() == std::ifstream::traits_type::eof()) {
-	//if (*bytesPos == bytesSize) {
-	//	return -1;
-	//}
 	// Stop when we encounter the next border. Do not consume it.
 	zeroCounter = 0;
 	while ((zeroCounter < 2 || c != 0x01) && *bytesPos < bytesSize) {
 		c = bytes[*bytesPos];
-		//printf("%02X ", c);
 		buf->push_back(c);
 		(*bytesPos)++;
 		if (c == 0x00) {
@@ -122,30 +104,13 @@ int getNextNAL(unsigned char* bytes, std::vector<Block>* buf, int* bytesPos, int
 			zeroCounter = 0;
 		}
 	}
-	printf("\n");
-	//if (ifs.peek() == std::ifstream::traits_type::eof()) {
-	//if (*bytesPos == bytesSize) {
-	//	return -1;
-	//}
-	//ifs.putback((unsigned char) 0x01);
-	//ifs.putback((unsigned char) 0x00);
-	//ifs.putback((unsigned char) 0x00);
 	if (zeroCounter >= 2 && (unsigned char)c == 0x01) {
-		printf("Shoot");
 		(*bytesPos) -= 3;
 		buf->pop_back();
 		buf->pop_back();
 		buf->pop_back();
 	}
-	printf("yikes\n");
-	int type = getNALType(buf);
-	//for (int i=0; i<buf->size(); i++) {
-	//	printf("%02X ", buf[i]);
-	//}
-	//printf("\n");
-
-	//return getNALType(buf);
-	return type;
+	return getNALType(buf);
 }
 
 /**
@@ -520,46 +485,28 @@ extern "C" int doStitching(unsigned char* tiledBitstream, unsigned char* bitstre
 	int ifs_idx = -1;
 	while (true) {
 		for (int ifs_idx=0; ifs_idx<2; ifs_idx++) {
-			// TODO nal is a vector, can do nal.size() instead
 			nalType = getNextNAL((ifs_idx == 0 ? bitstream_0 : bitstream_1), &nal,
 								 (ifs_idx == 0 ? bitstream_0Pos : bitstream_1Pos),
 								 (ifs_idx == 0 ? bitstream_0Size : bitstream_1Size));
-			//printf("nalType: %d\n", nalType);
-			//printf("\n");
-
-			//if (nalType == -1) goto done;
-			//if (ifs_idx==0) {
-			//	std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
-			//	totalSize += nal.size();
-			//}
-			//nal.clear();
-			//continue;
 			// Low qual on left and right, high in middle
 			switch (nalType) {
 				case P_SLICE:
 					if (tileBitrates[i] == ifs_idx) {
-					//if (ifs_idx == 0) {
 						modifyPSlice(&nal, (i==0), sliceSegAddrs[i], oldCtuOffsetBitSize,
 									 newCtuOffsetBitSize);
 						std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
 						totalSize += nal.size();
 					}
 					if (ifs_idx == 1) i++;
-					//if (ifs_idx == 0) i++;
 					break;
 				case I_SLICE:
-					// TODO
 					if (tileBitrates[i] == ifs_idx) {
-					//if (ifs_idx == 0) {
 						modifyISlice(&nal, (i==0), sliceSegAddrs[i], oldCtuOffsetBitSize,
 									 newCtuOffsetBitSize);
-						//ofs.write((char*)&nal[0], nal.size());
-						//std::memcpy(tiledBitstream+totalSize, nal.begin(), nal.size());
 						std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
 						totalSize += nal.size();
 					}
 					if (ifs_idx == 1) i++;
-					//if (ifs_idx == 0) i++;
 					break;
 				case SPS:
 					if (ifs_idx==0) {
@@ -578,13 +525,10 @@ extern "C" int doStitching(unsigned char* tiledBitstream, unsigned char* bitstre
 				case VPS:
 				case SEI:
 					if (ifs_idx==0) {
-						//ofs.write((char*)&nal[0], nal.size());
-						//std::memcpy(tiledBitstream+totalSize, nal.begin(), nal.size());
 						std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
 						totalSize += nal.size();
 					}
 					if (ifs_idx == 1) i = 0;
-					//if (ifs_idx == 0) i = 0;
 					break;
 				case OTHER:
 					break;
@@ -599,13 +543,3 @@ extern "C" int doStitching(unsigned char* tiledBitstream, unsigned char* bitstre
 	free(bitstream_1Pos);
 	return totalSize;
 }
-
-//extern "C" int cpp_test(int i) {
-//	printf("Testing!\n");
-//	printf("Here's i: %d\n", i);
-//	return 5;
-//}
-//
-//int main(int, char*[]) {
-//	return doStitching();
-//}

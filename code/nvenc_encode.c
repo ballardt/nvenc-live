@@ -34,9 +34,6 @@ typedef enum bitrate {
 } Bitrate;
 int bitrateValues[] = {1600000, 800000};
 
-//unsigned char* bitstreams[] = {NULL, NULL};
-//unsigned char* tiledBitstream = NULL;
-
 /**
  * Get the next frame, consisting of a Y, U, and V component.
  * Returns 1 if a frame was available, or 0 if there are no frames left in the file
@@ -118,7 +115,10 @@ void initializeHardware() {
 	}
 }
 
-static enum AVPixelFormat get_hw_format(AVCodecContext *ctx, const enum AVPixelFormat *pix_fmts) {
+/**
+ * This does not get called directly, 
+ */
+static enum AVPixelFormat getHwFormat(AVCodecContext *ctx, const enum AVPixelFormat *pix_fmts) {
     const enum AVPixelFormat *p;
     for (p = pix_fmts; *p != -1; p++) {
         if (*p == hwPixFmt)
@@ -156,7 +156,7 @@ void initializeContext(Bitrate bitrate, int width, int height) {
 		exit(1);
 	}
 	// Initialize GPU encoder
-	c->get_format = get_hw_format;
+	c->get_format = getHwFormat;
 	av_opt_set_int(c, "refcounted_frames", 1, 0);
 	c->hw_device_ctx = av_buffer_ref(hwDeviceCtx);
 
@@ -260,8 +260,7 @@ void encodeFrameWithContext(unsigned char* bitstream, unsigned char* y, unsigned
 			}
 	}
 	// Encode the image
-	frame->pts = 0;//frame_num; // TODO this is always 0?
-	//encoder_encode_nvenc(c, frame, pkt, outfile);
+	frame->pts = 0;
 	*bitstreamSize = sendFrameToNVENC(bitrate, frame, bitstream);
 }
 
@@ -309,16 +308,9 @@ int main(int argc, char* argv[]) {
 		bitstreamSizes[LOW_BITRATE] = 0;
 		rearrangeFrame(&y, &u, &v, width, height);
 		encodeFrame(y, u, v, width/NUM_SPLITS, height*NUM_SPLITS, bitstreamSizes);
-		// C++ function
-		printf("high bitstream size: %d\n", bitstreamSizes[HIGH_BITRATE]);
-		printf("low bitstream size: %d\n", bitstreamSizes[LOW_BITRATE]);
 		tiledBitstreamSize = doStitching(tiledBitstream, bitstreams[HIGH_BITRATE],
 										 bitstreams[LOW_BITRATE], bitstreamSizes[HIGH_BITRATE],
 										 bitstreamSizes[LOW_BITRATE], tileBitrates);
-		//for (int i=tiledBitstreamSize; i>tiledBitstreamSize-5; i--) {
-		//	printf("%02x ", tiledBitstream[i]);
-		//}
-		//printf("\n");
 		fwrite(tiledBitstream, sizeof(unsigned char), tiledBitstreamSize, outFile);
 	}
 
