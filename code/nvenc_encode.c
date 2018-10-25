@@ -310,13 +310,15 @@ int main(int argc, char* argv[]) {
 		rearrangeFrame(&y, &u, &v, width, height);
 		encodeFrame(y, u, v, width/NUM_SPLITS, height*NUM_SPLITS, bitstreamSizes);
 		// C++ function
+		printf("high bitstream size: %d\n", bitstreamSizes[HIGH_BITRATE]);
+		printf("low bitstream size: %d\n", bitstreamSizes[LOW_BITRATE]);
 		tiledBitstreamSize = doStitching(tiledBitstream, bitstreams[HIGH_BITRATE],
 										 bitstreams[LOW_BITRATE], bitstreamSizes[HIGH_BITRATE],
 										 bitstreamSizes[LOW_BITRATE], tileBitrates);
-		for (int i=0; i<5; i++) {
-			printf("%02x ", tiledBitstream[i]);
-		}
-		printf("\n");
+		//for (int i=tiledBitstreamSize; i>tiledBitstreamSize-5; i--) {
+		//	printf("%02x ", tiledBitstream[i]);
+		//}
+		//printf("\n");
 		fwrite(tiledBitstream, sizeof(unsigned char), tiledBitstreamSize, outFile);
 	}
 
