@@ -17,7 +17,7 @@
 #include "link_stitcher.h"
 
 #define NUM_SPLITS 3 // TODO replace with numTileCols; they're equivalent
-#define BITSTREAM_SIZE 100000
+#define BITSTREAM_SIZE 200000 // Increase if necessary; the program will let you know
 
 static AVBufferRef* hwDeviceCtx = NULL;
 static enum AVPixelFormat hwPixFmt;
