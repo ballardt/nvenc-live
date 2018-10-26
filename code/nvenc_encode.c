@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <getopt.h>
+#include <time.h>
 
 #include "libavutil/common.h"
 #include "libavcodec/avcodec.h"
@@ -25,7 +26,7 @@ static int hardwareInitialized = 0;
 const char* codecName;
 const AVCodec* codec;
 AVCodecContext* codecContextArr[] = {NULL, NULL};
-AVFrame* frames[] = {NULL, NULL};
+AVFrame* frame = NULL;
 AVPacket* pkt;
 enum AVHWDeviceType hwDeviceType;
 
@@ -48,6 +49,10 @@ typedef struct {
 	char* tileBitratesFilename; // TODO
 } Config;
 int numTiles; // Should we pass instead? Makes sense to be global, but kind of sloppy
+
+clock_t begin;
+clock_t end;
+double time_spent;
 
 /**
  * Get the next frame, consisting of a Y, U, and V component.
@@ -165,10 +170,14 @@ void initializeContext(Bitrate bitrate, int width, int height) {
 	}
 	// Allocate space for the frame. This is a struct representing one frame of the
 	// raw video. These are sent directly to NVENC.
-	AVFrame* frame = av_frame_alloc();
-	if (!frame) {
-		printf("Error allocating frame\n");
-		exit(1);
+	int initFrame = 0;
+	if (frame == NULL) {
+		initFrame = 1;
+		frame = av_frame_alloc();
+		if (!frame) {
+			printf("Error allocating frame\n");
+			exit(1);
+		}
 	}
 	// Initialize GPU encoder
 	c->get_format = getHwFormat;
@@ -200,19 +209,20 @@ void initializeContext(Bitrate bitrate, int width, int height) {
 		exit(1);
 	}
 	// Open the frame
-	frame->format = c->pix_fmt;
-	frame->width = c->width;
-	frame->height = c->height;
-	ret = av_frame_get_buffer(frame, 32);
-	if (ret < 0) {
-		printf("Error allocating frame data\n");
-		exit(1);
+	if (initFrame) {
+		frame->format = c->pix_fmt;
+		frame->width = c->width;
+		frame->height = c->height;
+		ret = av_frame_get_buffer(frame, 32);
+		if (ret < 0) {
+			printf("Error allocating frame data\n");
+			exit(1);
+		}
 	}
 	codecContextArr[bitrate] = c;
-	frames[bitrate] = frame;
 }
 
-int sendFrameToNVENC(Bitrate bitrate, AVFrame* frame, unsigned char* bitstream) {
+int sendFrameToNVENC(Bitrate bitrate, unsigned char* bitstream) {
 	int bsPos = 0;
 	pkt->data = NULL;
 	pkt->size = 0;
@@ -257,11 +267,20 @@ int sendFrameToNVENC(Bitrate bitrate, AVFrame* frame, unsigned char* bitstream) 
 void encodeFrameWithContext(unsigned char* bitstream, unsigned char* y, unsigned char* u,
 							unsigned char* v, int yWidth, int yHeight, Bitrate bitrate,
 							int* bitstreamSize) {
-	if (codecContextArr[bitrate] == NULL) {
-		initializeContext(bitrate, yWidth, yHeight);
-	}
+	//if (codecContextArr[bitrate] == NULL) {
+	//	initializeContext(bitrate, yWidth, yHeight);
+	//}
+	// Encode the image
+	frame->pts = 0;
+	*bitstreamSize = sendFrameToNVENC(bitrate, bitstream);
+}
+
+void putImageInFrame(unsigned char* y, unsigned char* u, unsigned char* v,
+					 int yWidth, int yHeight) {
 	int ret;
-	AVFrame* frame = frames[bitrate];
+	if (!frame) {
+		printf("YIKES buddy!\n");
+	}
 	ret = av_frame_make_writable(frame);
 	if (ret < 0) {
 		printf("Frame not writable\n");
@@ -270,15 +289,12 @@ void encodeFrameWithContext(unsigned char* bitstream, unsigned char* y, unsigned
 	// Copy the source image to the frame to be encoded
 	int uvWidth = yWidth / 2;
 	for (int i=0; i<yHeight; i++) {
-			memcpy(frame->data[0]+(i*yWidth), y+(i*yWidth), yWidth);
-			if (i < yHeight / 2) {
-					memcpy(frame->data[1]+(i*uvWidth), u+(i*uvWidth), uvWidth);
-					memcpy(frame->data[2]+(i*uvWidth), v+(i*uvWidth), uvWidth);
-			}
+		memcpy(frame->data[0]+(i*yWidth), y+(i*yWidth), yWidth);
+		if (i < yHeight / 2) {
+			memcpy(frame->data[1]+(i*uvWidth), u+(i*uvWidth), uvWidth);
+			memcpy(frame->data[2]+(i*uvWidth), v+(i*uvWidth), uvWidth);
+		}
 	}
-	// Encode the image
-	frame->pts = 0;
-	*bitstreamSize = sendFrameToNVENC(bitrate, frame, bitstream);
 }
 
 /**
@@ -288,7 +304,10 @@ void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width
 				 int height, int bitstreamSizes[2]) {
 	if (codecContextArr[0] == NULL) {
 		initializeHardware();
+		initializeContext(HIGH_BITRATE, width, height);
+		initializeContext(LOW_BITRATE, width, height);
 	}
+	putImageInFrame(y, u, v, width, height);
 	encodeFrameWithContext(bitstreams[HIGH_BITRATE], y, u, v, width, height, HIGH_BITRATE,
 						   &bitstreamSizes[HIGH_BITRATE]);
 	encodeFrameWithContext(bitstreams[LOW_BITRATE], y, u, v, width, height, LOW_BITRATE,
@@ -406,22 +425,41 @@ int main(int argc, char* argv[]) {
 	while (getNextFrame(inFile, y, u, v, ySize)) {
 		bitstreamSizes[HIGH_BITRATE] = 0;
 		bitstreamSizes[LOW_BITRATE] = 0;
+
+		//begin = clock();
 		rearrangeFrame(&y, &u, &v, config->width, config->height);
+		//end = clock();
+		//time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
+		//printf("rearrange time: %f\n", time_spent);
+
+		//begin = clock();
 		encodeFrame(y, u, v, config->width/NUM_SPLITS, config->height*NUM_SPLITS, bitstreamSizes);
+		//end = clock();
+		//time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
+		//printf("encode time: %f\n", time_spent);
+
+		//begin = clock();
 		tiledBitstreamSize = doStitching(tiledBitstream, bitstreams[HIGH_BITRATE],
 										 bitstreams[LOW_BITRATE], bitstreamSizes[HIGH_BITRATE],
 										 bitstreamSizes[LOW_BITRATE], tileBitrates, config->width,
 										 config->height, config->numTileRows, config->numTileCols);
+		//end = clock();
+		//time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
+		//printf("stitch time: %f\n", time_spent);
+
+		//begin = clock();
 		fwrite(tiledBitstream, sizeof(unsigned char), tiledBitstreamSize, outFile);
+		//end = clock();
+		//time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
+		//printf("write time: %f\n", time_spent);
 	}
 
 	// Wrap up
-	sendFrameToNVENC(HIGH_BITRATE, NULL, bitstreams[HIGH_BITRATE]);
-    sendFrameToNVENC(LOW_BITRATE, NULL, bitstreams[LOW_BITRATE]);
+	sendFrameToNVENC(HIGH_BITRATE, bitstreams[HIGH_BITRATE]);
+    sendFrameToNVENC(LOW_BITRATE, bitstreams[LOW_BITRATE]);
 	avcodec_free_context(&codecContextArr[HIGH_BITRATE]);
 	avcodec_free_context(&codecContextArr[LOW_BITRATE]);
-	av_frame_free(&frames[HIGH_BITRATE]);
-	av_frame_free(&frames[LOW_BITRATE]);
+	av_frame_free(&frame);
 	av_packet_free(&pkt);
 	av_buffer_unref(&hwDeviceCtx);
 	free(y);
