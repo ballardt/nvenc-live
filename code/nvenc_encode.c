@@ -47,6 +47,7 @@ typedef struct {
 	int numTileRows; // TODO
 	char* tileBitratesFilename; // TODO
 } Config;
+int numTiles; // Should we pass instead? Makes sense to be global, but kind of sloppy
 
 /**
  * Get the next frame, consisting of a Y, U, and V component.
@@ -189,6 +190,8 @@ void initializeContext(Bitrate bitrate, int width, int height) {
 	c->pix_fmt = AV_PIX_FMT_YUV420P;
 	// Whether high or low bitrate
 	c->bit_rate = bitrateValues[bitrate];
+	// Number of tiles == number of slices
+	c->num_slices = numTiles;
 
 	// Open the codec
 	ret = avcodec_open2(c, codec, NULL);
@@ -385,6 +388,7 @@ int main(int argc, char* argv[]) {
 	}
 	bitrateValues[HIGH_BITRATE] = config->highBitrate;
 	bitrateValues[LOW_BITRATE] = config->lowBitrate;
+	numTiles = config->numTileRows * config->numTileCols;
 	int ySize = config->width * config->height;
 	int uvSize = ySize / 4;
 	int bitstreamSizes[2];
