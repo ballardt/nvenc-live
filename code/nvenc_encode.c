@@ -255,21 +255,6 @@ int sendFrameToNVENC(Bitrate bitrate, unsigned char* bitstream) {
 	}
 }
 
-/**
- * Encode a frame with a given AVContext. In other words, encode either at a high
- * or low quality.
- */
-void encodeFrameWithContext(unsigned char* bitstream, unsigned char* y, unsigned char* u,
-							unsigned char* v, int yWidth, int yHeight, Bitrate bitrate,
-							int* bitstreamSize) {
-	//if (codecContextArr[bitrate] == NULL) {
-	//	initializeContext(bitrate, yWidth, yHeight);
-	//}
-	// Encode the image
-	frame->pts = 0;
-	*bitstreamSize = sendFrameToNVENC(bitrate, bitstream);
-}
-
 void putImageInFrame(unsigned char* y, unsigned char* u, unsigned char* v,
 					 int yWidth, int yHeight) {
 	int ret;
@@ -290,6 +275,7 @@ void putImageInFrame(unsigned char* y, unsigned char* u, unsigned char* v,
 			memcpy(frame->data[2]+(i*uvWidth), v+(i*uvWidth), uvWidth);
 		}
 	}
+	frame->pts = 0; // TODO do we need this?
 }
 
 /**
@@ -303,10 +289,8 @@ void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width
 		initializeContext(LOW_BITRATE, width, height);
 	}
 	putImageInFrame(y, u, v, width, height);
-	encodeFrameWithContext(bitstreams[HIGH_BITRATE], y, u, v, width, height, HIGH_BITRATE,
-						   &bitstreamSizes[HIGH_BITRATE]);
-	encodeFrameWithContext(bitstreams[LOW_BITRATE], y, u, v, width, height, LOW_BITRATE,
-						   &bitstreamSizes[LOW_BITRATE]);
+	bitstreamSizes[HIGH_BITRATE] = sendFrameToNVENC(HIGH_BITRATE, bitstreams[HIGH_BITRATE]);
+	bitstreamSizes[LOW_BITRATE] = sendFrameToNVENC(LOW_BITRATE, bitstreams[LOW_BITRATE]);
 }
 
 /**
