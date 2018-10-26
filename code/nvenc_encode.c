@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <getopt.h>
-#include <time.h>
 
 #include "libavutil/common.h"
 #include "libavcodec/avcodec.h"
@@ -49,10 +48,6 @@ typedef struct {
 	char* tileBitratesFilename; // TODO
 } Config;
 int numTiles; // Should we pass instead? Makes sense to be global, but kind of sloppy
-
-clock_t begin;
-clock_t end;
-double time_spent;
 
 /**
  * Get the next frame, consisting of a Y, U, and V component.
@@ -426,32 +421,13 @@ int main(int argc, char* argv[]) {
 		bitstreamSizes[HIGH_BITRATE] = 0;
 		bitstreamSizes[LOW_BITRATE] = 0;
 
-		//begin = clock();
 		rearrangeFrame(&y, &u, &v, config->width, config->height);
-		//end = clock();
-		//time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
-		//printf("rearrange time: %f\n", time_spent);
-
-		//begin = clock();
 		encodeFrame(y, u, v, config->width/NUM_SPLITS, config->height*NUM_SPLITS, bitstreamSizes);
-		//end = clock();
-		//time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
-		//printf("encode time: %f\n", time_spent);
-
-		//begin = clock();
 		tiledBitstreamSize = doStitching(tiledBitstream, bitstreams[HIGH_BITRATE],
 										 bitstreams[LOW_BITRATE], bitstreamSizes[HIGH_BITRATE],
 										 bitstreamSizes[LOW_BITRATE], tileBitrates, config->width,
 										 config->height, config->numTileRows, config->numTileCols);
-		//end = clock();
-		//time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
-		//printf("stitch time: %f\n", time_spent);
-
-		//begin = clock();
 		fwrite(tiledBitstream, sizeof(unsigned char), tiledBitstreamSize, outFile);
-		//end = clock();
-		//time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
-		//printf("write time: %f\n", time_spent);
 	}
 
 	// Wrap up
