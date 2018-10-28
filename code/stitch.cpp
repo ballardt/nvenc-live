@@ -1,12 +1,14 @@
 #include <fstream>
+#include <sstream>
 #include <iterator>
 #include <iostream>
+#include <cstring>
 #include <vector>
 #include <map>
 #include <math.h>
 #include <boost/dynamic_bitset.hpp>
 
-#include "kvazaar/src/link_stitcher.h"
+#include "link_stitcher.h"
 
 typedef unsigned char Block;
 typedef boost::dynamic_bitset<Block> Bitset;
@@ -14,6 +16,9 @@ typedef boost::dynamic_bitset<Block> Bitset;
 enum NALType {
 	P_SLICE = 0,
 	I_SLICE,
+	VPS,
+	SPS,
+	PPS,
 	SEI,
 	OTHER
 };
@@ -27,7 +32,14 @@ std::map<int, Bitset> ctuOffsetBits;
  */
 NALType getNALType(std::vector<Block>* nal) {
 	NALType nalType;
-	unsigned char typeBits = (*nal)[3] >> 1;
+	int typeBitsOffset = 3;
+	// Move past any extra 0x00's. This is mostly for VPS.
+	int i = 0;
+	while ((*nal)[i+2] != 0x01) {
+		typeBitsOffset++;
+		i++;
+	}
+	unsigned char typeBits = (*nal)[typeBitsOffset] >> 1;
 	switch (typeBits) {
 		case 0x00:
 		case 0x01:
@@ -36,6 +48,15 @@ NALType getNALType(std::vector<Block>* nal) {
 		case 0x13:
 		case 0x14:
 			nalType = I_SLICE;
+			break;
+		case 0x20:
+			nalType = VPS;
+			break;
+		case 0x21:
+			nalType = SPS;
+			break;
+		case 0x22:
+			nalType = PPS;
 			break;
 		case 0x27:
 		case 0x28:
@@ -55,46 +76,40 @@ NALType getNALType(std::vector<Block>* nal) {
  *
  * Returns the NAL type, or -1 if there are no more NALs in the stream.
  */
-int getNextNAL(std::ifstream& ifs, std::vector<Block>* buf) {
+int getNextNAL(unsigned char* bytes, std::vector<Block>* buf, int* bytesPos, int bytesSize) {
+	if (*bytesPos >= bytesSize) {
+		return -1;
+	}
 	// Go past the first border and consume it.
 	int zeroCounter = 0;
-	char c = 0xFF;
-	int bufIdx = 0;
-	while ((zeroCounter < 2 || (unsigned char)c != 0x01)
-		   && ifs.peek() != std::ifstream::traits_type::eof()) {
-		ifs.read(&c, 1);
-		buf->push_back((unsigned char)c);
-		bufIdx++;
-		if ((unsigned char)c == 0x00) {
+	unsigned char c = 0xFF;
+	while ((zeroCounter < 2 || c != 0x01) && *bytesPos < bytesSize) {
+		c = bytes[*bytesPos];
+		buf->push_back(c);
+		(*bytesPos)++;
+		if (c == 0x00) {
 			zeroCounter++;
 		}
-	}
-	if (ifs.peek() == std::ifstream::traits_type::eof()) {
-		return -1;
 	}
 	// Stop when we encounter the next border. Do not consume it.
 	zeroCounter = 0;
-	while ((zeroCounter < 2 || (unsigned char)c != 0x01)
-		   && ifs.peek() != std::ifstream::traits_type::eof()) {
-		ifs.read(&c, 1);
-		buf->push_back((unsigned char)c);
-		bufIdx++;
-		if ((unsigned char)c == 0x00) {
+	while ((zeroCounter < 2 || c != 0x01) && *bytesPos < bytesSize) {
+		c = bytes[*bytesPos];
+		buf->push_back(c);
+		(*bytesPos)++;
+		if (c == 0x00) {
 			zeroCounter++;
 		}
-		else if (zeroCounter < 2 || (unsigned char)c != 0x01) {
+		else if (zeroCounter < 2 || c != 0x01) {
 			zeroCounter = 0;
 		}
 	}
-	if (ifs.peek() == std::ifstream::traits_type::eof()) {
-		return -1;
+	if (zeroCounter >= 2 && (unsigned char)c == 0x01) {
+		(*bytesPos) -= 3;
+		buf->pop_back();
+		buf->pop_back();
+		buf->pop_back();
 	}
-	ifs.putback((unsigned char) 0x01);
-	ifs.putback((unsigned char) 0x00);
-	ifs.putback((unsigned char) 0x00);
-	buf->pop_back();
-	buf->pop_back();
-	buf->pop_back();
 	return getNALType(buf);
 }
 
@@ -326,7 +341,7 @@ void doneEditingNAL(std::vector<Block>* nal, Bitset* newBits, Bitset* oldBits, i
 }
 
 // Change pic width/height
-void modifySPS(std::vector<Block>* nal) {
+void modifySPS(std::vector<Block>* nal, int width, int height) {
 	int oldBitsPos = 0;
 	Bitset oldBits(nal->size()*8);
 	Bitset newBits(0);
@@ -339,16 +354,15 @@ void modifySPS(std::vector<Block>* nal) {
 	// Consume old values for width/height, insert new ones
 	oldBitsPos += copyExpGolomb(&oldBits, NULL, oldBitsPos);
 	oldBitsPos += copyExpGolomb(&oldBits, NULL, oldBitsPos);
-	writeUnsExpGolomb(&newBits, 3840);
-	writeUnsExpGolomb(&newBits, 1472);
+	writeUnsExpGolomb(&newBits, width);
+	writeUnsExpGolomb(&newBits, height);
 	// Finalize
 	doneEditingNAL(nal, &newBits, &oldBits, oldBitsPos, true, false);
 }
 
 // Enable tiles and insert the tile-related fields
-void modifyPPS(std::vector<Block>* nal) {
-	const int NUM_TILE_COLS = 3;
-	const int NUM_TILE_ROWS = 1;
+void modifyPPS(std::vector<Block>* nal, int numTileCols, int numTileRows) {
+	// TODO these should be passed into the function
 	int oldBitsPos = 0;
 	Bitset oldBits(nal->size()*8);
 	Bitset newBits(0);
@@ -372,17 +386,14 @@ void modifyPPS(std::vector<Block>* nal) {
 	newBits.push_back(1);
 	oldBitsPos += copyBits(&oldBits, &newBits, oldBitsPos, 1);
 	// Insert tile info (num tile cols, num tile rows, 2 flags)
-	writeUnsExpGolomb(&newBits, NUM_TILE_COLS-1);
-	writeUnsExpGolomb(&newBits, NUM_TILE_ROWS-1);
+	writeUnsExpGolomb(&newBits, numTileCols-1);
+	writeUnsExpGolomb(&newBits, numTileRows-1);
 	newBits.push_back(1);
 	newBits.push_back(0);
 	// Finalize
 	doneEditingNAL(nal, &newBits, &oldBits, oldBitsPos, true, false);
 }
 
-// TODO this is very slow, make it so we aren't creating a new bitset with each I slice
-// Idea: since we know what the ctus are beforehand, just create like 2 cutOffsetBits globals
-// and refer to them here based on ctuOffset. Maybe with like a map or something.
 void writeCtuOffset(Bitset* bits, unsigned int ctuOffset, int ctuOffsetBitSize) {
 	for (int i=0; i<ctuOffsetBitSize; i++) {
 		bits->push_back(ctuOffsetBits[ctuOffset][ctuOffsetBitSize-i-1]);
@@ -397,17 +408,6 @@ void modifyISlice(std::vector<Block>* nal, bool isFirstSlice, int ctuOffset, int
 	Bitset newBits(0);
 	// Convert the NAL to some bits
 	nalToBitset(&oldBits, nal);
-	//for (int i=0; i<64; i++) {
-	//	printf("%02X ", (*nal)[i]);
-	//}
-	//printf("\n");
-	//for (int i=0; i<128; i++) {
-	//	if (i % 8 == 0) {
-	//		std::cout << " ";
-	//	}
-	//	std::cout << oldBits[i];
-	//}
-	//std::cout << std::endl << std::endl;
 	// Navigate to the right spot and make our changes
 	oldBitsPos += copyBits(&oldBits, &newBits, oldBitsPos, 42);
 	oldBitsPos += copyExpGolomb(&oldBits, &newBits, oldBitsPos);
@@ -451,72 +451,84 @@ void modifyPSlice(std::vector<Block>* nal, bool isFirstSlice, int ctuOffset, int
 	doneEditingNAL(nal, &newBits, &oldBits, oldBitsPos, false, true);
 }
 
-int doStitching() {
-	std::ifstream ifs_0("ms9390_0.hevc", std::ios::binary);
-	std::ifstream ifs_1("ms9390_1.hevc", std::ios::binary);
-	std::ofstream ofs("ms9390_stitched.hevc", std::ios::binary);
+extern "C" int doStitching(unsigned char* tiledBitstream, unsigned char* bitstream_0,
+						   unsigned char* bitstream_1, int bitstream_0Size, int bitstream_1Size,
+						   int* tileBitrates, int finalWidth, int finalHeight, int numTileRows,
+						   int numTileCols) {
+	int totalSize = 0;
+	int tbPos = 0;
+	int* bitstream_0Pos = (int*)malloc(sizeof(int));
+	int* bitstream_1Pos = (int*)malloc(sizeof(int));
+	*bitstream_0Pos = 0;
+	*bitstream_1Pos = 0;
 	std::vector<Block> nal;
 
-	// VPS
-	getNextNAL(ifs_0, &nal);
-	ofs.write((char*)&nal[0], nal.size());
-	nal.clear();
-	// SPS
-	getNextNAL(ifs_0, &nal);
-	modifySPS(&nal);
-	ofs.write((char*)&nal[0], nal.size());
-	nal.clear();
-	// PPS
-	getNextNAL(ifs_0, &nal);
-	modifyPPS(&nal);
-	ofs.write((char*)&nal[0], nal.size());
-	nal.clear();
-	// SEI
-	getNextNAL(ifs_0, &nal);
-	ofs.write((char*)&nal[0], nal.size());
-	nal.clear();
-	// Discard the ones from the other ifs
-	getNextNAL(ifs_1, &nal);
-	nal.clear();
-	getNextNAL(ifs_1, &nal);
-	nal.clear();
-	getNextNAL(ifs_1, &nal);
-	nal.clear();
-	getNextNAL(ifs_1, &nal);
-	nal.clear();
-	// Remainder
-	int nalType = 0;
-	const int oldCtuOffsetBitSize = ceil(log2((1280/32)*(4416/32)));
-	const int newCtuOffsetBitSize = ceil(log2((3840/32)*(1472/32)));
-	const int sliceSegAddrs[] = {0, 40, 80}; // 0 not used, but convenient for index
-	for (int i=1; i<3; i++) {
+	// Get as many NALs as we have in the stream
+	const int oldCtuOffsetBitSize = ceil(log2(((finalWidth/numTileCols)/32)*((finalHeight*numTileCols)/32)));
+	const int newCtuOffsetBitSize = ceil(log2((finalWidth/32)*(finalHeight/32)));
+	// TODO based on num tiles and layout
+	int numTiles = numTileRows * numTileCols;
+	int imgCtuWidth = finalWidth / 32;
+	int tileCtuHeight = (finalHeight / 32) / numTileRows;
+	int tileCtuWidth = imgCtuWidth / numTileCols;
+	int tileIdx;
+	int sliceSegAddrs[numTiles]; // 0 not used, but convenient for index
+	for (int col=0; col<numTileCols; col++) {
+		for (int row=0; row<numTileRows; row++) {
+			tileIdx = (numTileRows * col) + row;
+			sliceSegAddrs[tileIdx] = (row * imgCtuWidth * tileCtuHeight) + (col * tileCtuWidth);
+		}
+	}
+	for (int i=0; i<numTiles; i++) {
 		ctuOffsetBits.insert({sliceSegAddrs[i], Bitset(newCtuOffsetBitSize, sliceSegAddrs[i])});
 	}
 	int i = 0;
+	int nalType;
 	int ifs_idx = -1;
 	while (true) {
 		for (int ifs_idx=0; ifs_idx<2; ifs_idx++) {
-			nalType = getNextNAL((ifs_idx == 0 ? ifs_0 : ifs_1), &nal);
+			nalType = getNextNAL((ifs_idx == 0 ? bitstream_0 : bitstream_1), &nal,
+								 (ifs_idx == 0 ? bitstream_0Pos : bitstream_1Pos),
+								 (ifs_idx == 0 ? bitstream_0Size : bitstream_1Size));
 			// Low qual on left and right, high in middle
 			switch (nalType) {
 				case P_SLICE:
-					if ((i==0 && ifs_idx==1) || (i==1 && ifs_idx==0) || (i==2 && ifs_idx==1)) {
-						modifyPSlice(&nal, (i==0), sliceSegAddrs[i], oldCtuOffsetBitSize, newCtuOffsetBitSize);
-						ofs.write((char*)&nal[0], nal.size());
+					if (tileBitrates[i] == ifs_idx) {
+						modifyPSlice(&nal, (i==0), sliceSegAddrs[i], oldCtuOffsetBitSize,
+									 newCtuOffsetBitSize);
+						std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
+						totalSize += nal.size();
 					}
 					if (ifs_idx == 1) i++;
 					break;
 				case I_SLICE:
-					// TODO
-					if ((i==0 && ifs_idx==1) || (i==1 && ifs_idx==0) || (i==2 && ifs_idx==1)) {
-						modifyISlice(&nal, (i==0), sliceSegAddrs[i], oldCtuOffsetBitSize, newCtuOffsetBitSize);
-						ofs.write((char*)&nal[0], nal.size());
+					if (tileBitrates[i] == ifs_idx) {
+						modifyISlice(&nal, (i==0), sliceSegAddrs[i], oldCtuOffsetBitSize,
+									 newCtuOffsetBitSize);
+						std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
+						totalSize += nal.size();
 					}
 					if (ifs_idx == 1) i++;
 					break;
+				case SPS:
+					if (ifs_idx==0) {
+						modifySPS(&nal, finalWidth, finalHeight);
+						std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
+						totalSize += nal.size();
+					}
+					break;
+				case PPS:
+					if (ifs_idx==0) {
+						modifyPPS(&nal, numTileCols, numTileRows);
+						std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
+						totalSize += nal.size();
+					}
+					break;
+				case VPS:
 				case SEI:
 					if (ifs_idx==0) {
-						ofs.write((char*)&nal[0], nal.size());
+						std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
+						totalSize += nal.size();
 					}
 					if (ifs_idx == 1) i = 0;
 					break;
@@ -529,19 +541,7 @@ int doStitching() {
 		}
 	}
  done:
-	ifs_0.close();
-	ifs_1.close();
-	ofs.close();
-
-	return 0;
-}
-
-extern "C" int cpp_test(int i) {
-	printf("Testing!\n");
-	printf("Here's i: %d\n", i);
-	return 5;
-}
-
-int main(int, char*[]) {
-	return doStitching();
+	free(bitstream_0Pos);
+	free(bitstream_1Pos);
+	return totalSize;
 }
