@@ -45,7 +45,8 @@ typedef struct {
 	int lowBitrate;
 	int numTileCols; // TODO
 	int numTileRows; // TODO
-	char* tileBitratesFilename; // TODO
+	int* tileBitrates; // TODO
+	int numTileBitrates;
 } Config;
 int numTiles; // Should we pass instead? Makes sense to be global, but kind of sloppy
 
@@ -294,6 +295,21 @@ void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width
 }
 
 /**
+ * Process tile bitrates
+ * Implementation is sloppy, should be changed to be a file in the future
+ */
+int* processTileBitrates(char* tileBitratesStr, Config* config) {
+	int tbsLen = strlen(tileBitratesStr);
+	int* tileBitrates = (int*)malloc(sizeof(int) * tbsLen);
+	for (int i=0; i<strlen(tileBitratesStr); i++) {
+		// The subtraction converts the '1' or '0' to an int
+		tileBitrates[i] = tileBitratesStr[i] - '0';
+	}
+	config->numTileBitrates = tbsLen;
+	return tileBitrates;
+}
+
+/**
  * Process the command-line arguments to configure the program
  */
 void processInput(Config* config, int argc, char* argv[]) {
@@ -307,7 +323,7 @@ void processInput(Config* config, int argc, char* argv[]) {
 	config->width = -1;
 	config->height = -1;
 	config->fps = -1;
-	config->tileBitratesFilename = NULL;
+	config->tileBitrates = NULL;
 	// Read input
 	static struct option long_options[] = {
 		{"input", required_argument, 0, 'i'},
@@ -319,7 +335,7 @@ void processInput(Config* config, int argc, char* argv[]) {
 		{"low-bitrate", required_argument, 0, 'l'},
 		{"num-tile-rows", required_argument, 0, 'r'},
 		{"num-tile-cols", required_argument, 0, 'c'},
-		{"tile-bitrates-file", required_argument, 0, 't'},
+		{"tile-bitrates", required_argument, 0, 't'},
 		{0, 0, 0, 0}
 	};
 	int opt;
@@ -354,7 +370,7 @@ void processInput(Config* config, int argc, char* argv[]) {
 				config->numTileCols = atoi(optarg);
 				break;
 			case 't':
-				config->tileBitratesFilename = optarg;
+				config->tileBitrates = processTileBitrates(optarg, config);
 				break;
 		}
 	}
@@ -364,8 +380,13 @@ void processInput(Config* config, int argc, char* argv[]) {
 		config->width == -1 ||
 		config->height == -1 ||
 		config->fps == -1 ||
-		config->tileBitratesFilename == NULL) {
+		config->tileBitrates == NULL) {
 		printf("Error: invalid command line parameters. Aborting.\n");
+		exit(1);
+	}
+	int numTiles = config->numTileRows * config->numTileCols;
+	if (config->numTileBitrates != numTiles) {
+		printf("Error: incorrect number of tile bitrates specified. Aborting.\n");
 		exit(1);
 	}
 }
@@ -391,8 +412,6 @@ int main(int argc, char* argv[]) {
 	int uvSize = ySize / 4;
 	int bitstreamSizes[2];
 	int tiledBitstreamSize;
-	int tileBitrates[] = {LOW_BITRATE, HIGH_BITRATE, LOW_BITRATE, HIGH_BITRATE, LOW_BITRATE,
-						  HIGH_BITRATE};
 	unsigned char* y = malloc(sizeof(unsigned char)*ySize);
 	unsigned char* u = malloc(sizeof(unsigned char)*uvSize);
 	unsigned char* v = malloc(sizeof(unsigned char)*uvSize);
@@ -409,8 +428,9 @@ int main(int argc, char* argv[]) {
 		encodeFrame(y, u, v, config->width/NUM_SPLITS, config->height*NUM_SPLITS, bitstreamSizes);
 		tiledBitstreamSize = doStitching(tiledBitstream, bitstreams[HIGH_BITRATE],
 										 bitstreams[LOW_BITRATE], bitstreamSizes[HIGH_BITRATE],
-										 bitstreamSizes[LOW_BITRATE], tileBitrates, config->width,
-										 config->height, config->numTileRows, config->numTileCols);
+										 bitstreamSizes[LOW_BITRATE], config->tileBitrates,
+										 config->width, config->height, config->numTileRows,
+										 config->numTileCols);
 		fwrite(tiledBitstream, sizeof(unsigned char), tiledBitstreamSize, outFile);
 	}
 
@@ -428,6 +448,7 @@ int main(int argc, char* argv[]) {
 	free(bitstreams[HIGH_BITRATE]);
 	free(bitstreams[LOW_BITRATE]);
 	free(tiledBitstream);
+	free(config);
 	fclose(inFile);
 	fclose(outFile);
 }
