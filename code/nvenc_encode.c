@@ -45,7 +45,8 @@ typedef struct {
 	int lowBitrate;
 	int numTileCols; // TODO
 	int numTileRows; // TODO
-	char* tileBitratesFilename; // TODO
+	int* tileBitrates; // TODO
+	int numTileBitrates;
 } Config;
 int numTiles; // Should we pass instead? Makes sense to be global, but kind of sloppy
 
@@ -255,21 +256,6 @@ int sendFrameToNVENC(Bitrate bitrate, unsigned char* bitstream) {
 	}
 }
 
-/**
- * Encode a frame with a given AVContext. In other words, encode either at a high
- * or low quality.
- */
-void encodeFrameWithContext(unsigned char* bitstream, unsigned char* y, unsigned char* u,
-							unsigned char* v, int yWidth, int yHeight, Bitrate bitrate,
-							int* bitstreamSize) {
-	//if (codecContextArr[bitrate] == NULL) {
-	//	initializeContext(bitrate, yWidth, yHeight);
-	//}
-	// Encode the image
-	frame->pts = 0;
-	*bitstreamSize = sendFrameToNVENC(bitrate, bitstream);
-}
-
 void putImageInFrame(unsigned char* y, unsigned char* u, unsigned char* v,
 					 int yWidth, int yHeight) {
 	int ret;
@@ -290,6 +276,7 @@ void putImageInFrame(unsigned char* y, unsigned char* u, unsigned char* v,
 			memcpy(frame->data[2]+(i*uvWidth), v+(i*uvWidth), uvWidth);
 		}
 	}
+	frame->pts = 0; // TODO do we need this?
 }
 
 /**
@@ -303,10 +290,23 @@ void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width
 		initializeContext(LOW_BITRATE, width, height);
 	}
 	putImageInFrame(y, u, v, width, height);
-	encodeFrameWithContext(bitstreams[HIGH_BITRATE], y, u, v, width, height, HIGH_BITRATE,
-						   &bitstreamSizes[HIGH_BITRATE]);
-	encodeFrameWithContext(bitstreams[LOW_BITRATE], y, u, v, width, height, LOW_BITRATE,
-						   &bitstreamSizes[LOW_BITRATE]);
+	bitstreamSizes[HIGH_BITRATE] = sendFrameToNVENC(HIGH_BITRATE, bitstreams[HIGH_BITRATE]);
+	bitstreamSizes[LOW_BITRATE] = sendFrameToNVENC(LOW_BITRATE, bitstreams[LOW_BITRATE]);
+}
+
+/**
+ * Process tile bitrates
+ * Implementation is sloppy, should be changed to be a file in the future
+ */
+int* processTileBitrates(char* tileBitratesStr, Config* config) {
+	int tbsLen = strlen(tileBitratesStr);
+	int* tileBitrates = (int*)malloc(sizeof(int) * tbsLen);
+	for (int i=0; i<strlen(tileBitratesStr); i++) {
+		// The subtraction converts the '1' or '0' to an int
+		tileBitrates[i] = tileBitratesStr[i] - '0';
+	}
+	config->numTileBitrates = tbsLen;
+	return tileBitrates;
 }
 
 /**
@@ -323,7 +323,7 @@ void processInput(Config* config, int argc, char* argv[]) {
 	config->width = -1;
 	config->height = -1;
 	config->fps = -1;
-	config->tileBitratesFilename = NULL;
+	config->tileBitrates = NULL;
 	// Read input
 	static struct option long_options[] = {
 		{"input", required_argument, 0, 'i'},
@@ -335,7 +335,7 @@ void processInput(Config* config, int argc, char* argv[]) {
 		{"low-bitrate", required_argument, 0, 'l'},
 		{"num-tile-rows", required_argument, 0, 'r'},
 		{"num-tile-cols", required_argument, 0, 'c'},
-		{"tile-bitrates-file", required_argument, 0, 't'},
+		{"tile-bitrates", required_argument, 0, 't'},
 		{0, 0, 0, 0}
 	};
 	int opt;
@@ -370,7 +370,7 @@ void processInput(Config* config, int argc, char* argv[]) {
 				config->numTileCols = atoi(optarg);
 				break;
 			case 't':
-				config->tileBitratesFilename = optarg;
+				config->tileBitrates = processTileBitrates(optarg, config);
 				break;
 		}
 	}
@@ -380,8 +380,13 @@ void processInput(Config* config, int argc, char* argv[]) {
 		config->width == -1 ||
 		config->height == -1 ||
 		config->fps == -1 ||
-		config->tileBitratesFilename == NULL) {
+		config->tileBitrates == NULL) {
 		printf("Error: invalid command line parameters. Aborting.\n");
+		exit(1);
+	}
+	int numTiles = config->numTileRows * config->numTileCols;
+	if (config->numTileBitrates != numTiles) {
+		printf("Error: incorrect number of tile bitrates specified. Aborting.\n");
 		exit(1);
 	}
 }
@@ -407,8 +412,6 @@ int main(int argc, char* argv[]) {
 	int uvSize = ySize / 4;
 	int bitstreamSizes[2];
 	int tiledBitstreamSize;
-	int tileBitrates[] = {LOW_BITRATE, HIGH_BITRATE, LOW_BITRATE, HIGH_BITRATE, LOW_BITRATE,
-						  HIGH_BITRATE};
 	unsigned char* y = malloc(sizeof(unsigned char)*ySize);
 	unsigned char* u = malloc(sizeof(unsigned char)*uvSize);
 	unsigned char* v = malloc(sizeof(unsigned char)*uvSize);
@@ -425,8 +428,9 @@ int main(int argc, char* argv[]) {
 		encodeFrame(y, u, v, config->width/NUM_SPLITS, config->height*NUM_SPLITS, bitstreamSizes);
 		tiledBitstreamSize = doStitching(tiledBitstream, bitstreams[HIGH_BITRATE],
 										 bitstreams[LOW_BITRATE], bitstreamSizes[HIGH_BITRATE],
-										 bitstreamSizes[LOW_BITRATE], tileBitrates, config->width,
-										 config->height, config->numTileRows, config->numTileCols);
+										 bitstreamSizes[LOW_BITRATE], config->tileBitrates,
+										 config->width, config->height, config->numTileRows,
+										 config->numTileCols);
 		fwrite(tiledBitstream, sizeof(unsigned char), tiledBitstreamSize, outFile);
 	}
 
@@ -444,6 +448,7 @@ int main(int argc, char* argv[]) {
 	free(bitstreams[HIGH_BITRATE]);
 	free(bitstreams[LOW_BITRATE]);
 	free(tiledBitstream);
+	free(config);
 	fclose(inFile);
 	fclose(outFile);
 }

@@ -234,108 +234,114 @@ void doneEditingNAL(std::vector<Block>* nal, Bitset* newBits, Bitset* oldBits, i
 		oldBitsPos += 1;
 		numZeros = (oldBitsPos % 8 != 0) ? (8 - (oldBitsPos % 8)) : 0;
 		oldBitsPos += numZeros;
-	}
-	// First, get byte-aligned with the original stream
-	int numToRead = (oldBitsPos % 8 != 0) ? (8 - (oldBitsPos % 8)) : 0;
-	for (int i=0; i<numToRead; i++) {
-		newBits->push_back((*oldBits)[oldBitsPos+i]);
-	}
-	oldBitsPos += numToRead;
-	// Go through the bytes, keeping an eye out for 0x03 and 0x0000
-	int idx;
-	bool allZeros;
-	bool isEmulationPreventionByte;
-	int mostRecentByteCheck = -1;
-	Bitset tempBits = Bitset(8);
-	Bitset compareBits = Bitset(16);
-	while (oldBitsPos < oldBits->size()) {
-		// Less than 8 bits, just copy what's left
-		if ((oldBits->size() - oldBitsPos) < 8) {
-			numToRead = (oldBitsPos % 8 != 0) ? (8 - (oldBitsPos % 8)) : 0;
-			for (int i=0; i<numToRead; i++) {
-				newBits->push_back((*oldBits)[oldBitsPos+i]);
-			}
+		// Assume that data can be left untouched, just get the rest of it
+		for (int i=0; i<oldBits->size()-oldBitsPos; i++) {
+			newBits->push_back((*oldBits)[oldBitsPos+i]);
 		}
-		// At least one full byte left
-		else {
-			// Get the next byte
-			for (int i=0; i<8; i++) {
-				tempBits[i] = (*oldBits)[oldBitsPos+i];
-			}
-			oldBitsPos += 8;
-			// If this is 0x03, ignore it, and do not copy it. Instead, we
-			// will search for 0x0000 ourselves and insert them. This is to
-			// handle the difference arrangement of bits after out changes.
-			compareBits.clear();
-			compareBits.push_back(0);
-			compareBits.push_back(0);
-			compareBits.push_back(0);
-			compareBits.push_back(0);
-			compareBits.push_back(0);
-			compareBits.push_back(0);
-			compareBits.push_back(1);
-			compareBits.push_back(1);
-			isEmulationPreventionByte = true;
-			for (int i=0; i<8; i++) {
-				if (compareBits[i] != tempBits[i]) {
-					isEmulationPreventionByte = false;
+	}
+	else {
+		// First, get byte-aligned with the original stream
+		int numToRead = (oldBitsPos % 8 != 0) ? (8 - (oldBitsPos % 8)) : 0;
+		for (int i=0; i<numToRead; i++) {
+			newBits->push_back((*oldBits)[oldBitsPos+i]);
+		}
+		oldBitsPos += numToRead;
+		// Go through the bytes, keeping an eye out for 0x03 and 0x0000
+		int idx;
+		bool allZeros;
+		bool isEmulationPreventionByte;
+		int mostRecentByteCheck = -1;
+		Bitset tempBits = Bitset(8);
+		Bitset compareBits = Bitset(16);
+		while (oldBitsPos < oldBits->size()) {
+			// Less than 8 bits, just copy what's left
+			if ((oldBits->size() - oldBitsPos) < 8) {
+				numToRead = (oldBitsPos % 8 != 0) ? (8 - (oldBitsPos % 8)) : 0;
+				for (int i=0; i<numToRead; i++) {
+					newBits->push_back((*oldBits)[oldBitsPos+i]);
 				}
 			}
-			if (doEmulationPrevention && isEmulationPreventionByte) {
-				continue;
-			}
-			// If this is not 0x03, append it to newBits and see if we need
-			// a 0x03 by checking if the most recent 2 bytes were 0x0000. If
-			// so, append one.
+			// At least one full byte left
 			else {
+				// Get the next byte
 				for (int i=0; i<8; i++) {
-					newBits->push_back(tempBits[i]);
+					tempBits[i] = (*oldBits)[oldBitsPos+i];
 				}
-				if (doEmulationPrevention && newBits->size() > 16) {
-					idx = (newBits->size() - (newBits->size() % 8)) - 16;
-					if (idx != mostRecentByteCheck) {
-						mostRecentByteCheck = idx;
-						allZeros = true;
-						for (int i=0; i<16; i++) {
-							if ((*newBits)[idx+i] != 0) {
-								allZeros = false;
+				oldBitsPos += 8;
+				// If this is 0x03, ignore it, and do not copy it. Instead, we
+				// will search for 0x0000 ourselves and insert them. This is to
+				// handle the difference arrangement of bits after out changes.
+				compareBits.clear();
+				compareBits.push_back(0);
+				compareBits.push_back(0);
+				compareBits.push_back(0);
+				compareBits.push_back(0);
+				compareBits.push_back(0);
+				compareBits.push_back(0);
+				compareBits.push_back(1);
+				compareBits.push_back(1);
+				isEmulationPreventionByte = true;
+				for (int i=0; i<8; i++) {
+					if (compareBits[i] != tempBits[i]) {
+						isEmulationPreventionByte = false;
+					}
+				}
+				if (doEmulationPrevention && isEmulationPreventionByte) {
+					continue;
+				}
+				// If this is not 0x03, append it to newBits and see if we need
+				// a 0x03 by checking if the most recent 2 bytes were 0x0000. If
+				// so, append one.
+				else {
+					for (int i=0; i<8; i++) {
+						newBits->push_back(tempBits[i]);
+					}
+					if (doEmulationPrevention && newBits->size() > 16) {
+						idx = (newBits->size() - (newBits->size() % 8)) - 16;
+						if (idx != mostRecentByteCheck) {
+							mostRecentByteCheck = idx;
+							allZeros = true;
+							for (int i=0; i<16; i++) {
+								if ((*newBits)[idx+i] != 0) {
+									allZeros = false;
+								}
 							}
-						}
-						if (allZeros) {
-							tempBits.clear();
-							int numExtra = newBits->size() % 8;
-							for (int i=0; i<numExtra; i++) {
-								tempBits.push_back((*newBits)[newBits->size()-1]);
-								newBits->pop_back();
-							}
-							newBits->push_back(0);
-							newBits->push_back(0);
-							newBits->push_back(0);
-							newBits->push_back(0);
-							newBits->push_back(0);
-							newBits->push_back(0);
-							newBits->push_back(1);
-							newBits->push_back(1);
-							for (int i=0; i<tempBits.size(); i++) {
-								newBits->push_back(tempBits[i]);
+							if (allZeros) {
+								tempBits.clear();
+								int numExtra = newBits->size() % 8;
+								for (int i=0; i<numExtra; i++) {
+									tempBits.push_back((*newBits)[newBits->size()-1]);
+									newBits->pop_back();
+								}
+								newBits->push_back(0);
+								newBits->push_back(0);
+								newBits->push_back(0);
+								newBits->push_back(0);
+								newBits->push_back(0);
+								newBits->push_back(0);
+								newBits->push_back(1);
+								newBits->push_back(1);
+								for (int i=0; i<tempBits.size(); i++) {
+									newBits->push_back(tempBits[i]);
+								}
 							}
 						}
 					}
 				}
 			}
 		}
+		// Remove the previous byte alignment
+		int lastOneIdx = newBits->size() - 1;
+		while ((*newBits)[lastOneIdx] != 1) {
+			lastOneIdx--;
+		}
+		int numToRemove = newBits->size() - lastOneIdx;
+		for (int i=0; i<numToRemove; i++) {
+			newBits->pop_back();
+		}
+		// Add our own byte alignment
+		byteAlignment(newBits);
 	}
-	// Remove the previous byte alignment
-	int lastOneIdx = newBits->size() - 1;
-	while ((*newBits)[lastOneIdx] != 1) {
-		lastOneIdx--;
-	}
-	int numToRemove = newBits->size() - lastOneIdx;
-	for (int i=0; i<numToRemove; i++) {
-		newBits->pop_back();
-	}
-	// Add our own byte alignment
-	byteAlignment(newBits);
 	// Write it to the NAL
 	bitsetToNAL(nal, newBits);
 }
@@ -389,7 +395,7 @@ void modifyPPS(std::vector<Block>* nal, int numTileCols, int numTileRows) {
 	writeUnsExpGolomb(&newBits, numTileCols-1);
 	writeUnsExpGolomb(&newBits, numTileRows-1);
 	newBits.push_back(1);
-	newBits.push_back(0);
+	newBits.push_back(1); // CHANGED
 	// Finalize
 	doneEditingNAL(nal, &newBits, &oldBits, oldBitsPos, true, false);
 }
@@ -419,7 +425,7 @@ void modifyISlice(std::vector<Block>* nal, bool isFirstSlice, int ctuOffset, int
 	oldBitsPos += copyBits(&oldBits, &newBits, oldBitsPos, 2);
 	oldBitsPos += copyExpGolomb(&oldBits, &newBits, oldBitsPos);
 	oldBitsPos += 1;
-	newBits.push_back(0);
+	newBits.push_back(1); // CHANGED
 	newBits.push_back(1);
 	// Finalize
 	doneEditingNAL(nal, &newBits, &oldBits, oldBitsPos, false, true);
@@ -445,7 +451,7 @@ void modifyPSlice(std::vector<Block>* nal, bool isFirstSlice, int ctuOffset, int
 	oldBitsPos += copyExpGolomb(&oldBits, &newBits, oldBitsPos);
 	oldBitsPos += copyExpGolomb(&oldBits, &newBits, oldBitsPos);
 	oldBitsPos += 1;
-	newBits.push_back(0);
+	newBits.push_back(1); // CHANGED
 	newBits.push_back(1);
 	// Finalize
 	doneEditingNAL(nal, &newBits, &oldBits, oldBitsPos, false, true);
