@@ -1,3 +1,6 @@
+# Output
+*.hevc
+
 # TeXstudio
 paper/*.log
 paper/*.out
