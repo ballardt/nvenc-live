@@ -1,6 +1,6 @@
 # Introduction
 
-The goal of RATS is to encode a raw video file (YUV420p) into an HEVC bitstream in real-time in such a way that different parts of the video are encoded at different bitrates. This is accomplished by rearranging the pixels in the source then encoding each frame twice--once at a high bitrate, and once at a low one. Finally, the resulting bitstreams are stitched together into a single image containing some high-bitrate parts and some low-bitrate parts, and the pieces that aren’t used in the final image are simply discarded.
+RATS was built using Ubuntu 17 and a GTX 1080 Ti. Any recent Ubuntu distro and a GPU with NVENCODE should work, but may require changes to the installation process. The goal of RATS is to encode a raw video file (YUV420p) into an HEVC bitstream in real-time in such a way that different parts of the video are encoded at different bitrates. This is accomplished by rearranging the pixels in the source then encoding each frame twice--once at a high bitrate, and once at a low one. Finally, the resulting bitstreams are stitched together into a single image containing some high-bitrate parts and some low-bitrate parts, and the pieces that aren’t used in the final image are simply discarded.
 
 
 This document will focus on the implementation of RATS and its usage. For a more thorough discussion on the idea behind RATS, see the demo paper. For any questions or comments, please contact trevorcoleballard@gmail.com.
@@ -9,7 +9,7 @@ This document will focus on the implementation of RATS and its usage. For a more
 
 ## NVENC and ffmpeg
 
-ffmpeg’s libraries are used to interact with NVENC, and both must be compiled and set up in a specific way. Also note that you must use the RATS fork of ffmpeg (https://github.com/ballardt/ffmpeg/tree/kvazaar), as this version changes the sliceMode and sliceModeData used for encoding, which is necessary to obtain the desired tiling behavior.
+ffmpeg’s libraries are used to interact with NVENC, and both must be compiled and set up in a specific way. Also note that you must use the RATS fork of ffmpeg (https://github.com/ballardt/ffmpeg), as this version changes the sliceMode and sliceModeData used for encoding, which is necessary to obtain the desired tiling behavior.
 
 Note that these commands worked for me, but I did not use the GPU for anything else. I have not tested them on other systems, or for other use cases. The system used is Ubuntu 17, with a GTX 1080 Ti.
 
@@ -43,7 +43,7 @@ Once finished, run
 
     sudo ldconfig
 
-Next, edit /etc/environment and append “CUDA_HOME=/usr/local/cuda” to the end of the file. Then add “/usr/local/cuda/bin:$HOME/bin” to PATH.
+Next, edit /etc/environment and append “CUDA\_HOME=/usr/local/cuda” to the end of the file. Then add “/usr/local/cuda/bin:$HOME/bin” to PATH.
 
 Finally, reboot the computer. Once rebooted, proceed to install ffmpeg.
 
@@ -54,8 +54,6 @@ This is similar to the official installation guide, but some packages are exclud
 First, clone the RATS fork of FFmpeg and create a directory for the build:
 
     git clone https://github.com/ballardt/ffmpeg/ ~/ffmpeg_sources
-    cd ~/ffmpeg_sources
-    git checkout kvazaar
     mkdir ~/ffmpeg_build
 
 FFmpeg is installed via a few different modules, which we will install in turn. Note that, at the time of this writing, there was an upstream issue with using libfdk-aac with FFmpeg. Audio is not important to RATS, so we will not install libfdk-aac.
@@ -124,7 +122,7 @@ Next, install FFmpeg:
     hash -r 
     sudo ldconfig 
 
-Next, edit /etc/ld.so.conf and append “/home/<your username>/ffmpeg_build/lib” to the bottom of it. Finally, run 
+Next, edit /etc/ld.so.conf and append “/home/<your username>/ffmpeg\_build/lib” to the bottom of it. Finally, run 
 
     sudo ldconfig 
 
@@ -163,19 +161,37 @@ Execute the "encode" object from the last step of the build with the required pa
 |--low-bitrate |The bitrate to encode low-quality tiles at. |No (default: 800000) |
 |--num-tile-rows |The number of rows of tiles. |Yes |
 |--num-tile-cols |The number of columns of tiles. |Yes |
-|--tile-bitrates |A string of 1s and 0s dictating the quality of each tile, beginning at the top left and proceeding across, then wrapping to the next line at the end of the tile row. A 1 is low-quality, while a 0 is high quality. Must match the number of tiles in image. Example: `--num-tile-rows=2 --num-tile-cols=3 --tile-bitrates=110101 |Yes |
+|--tile-bitrates |A string of 1s and 0s dictating the quality of each tile, beginning at the top left and proceeding down, then wrapping to the next column at the bottom of the tile column. A 1 is low-quality, while a 0 is high quality. Must match the number of tiles in image. |Yes |
+
+For example, say you have a 3840x2048 video that you want to cut into 6 tiles: 2 tile rows, 3 tile columns. The video is 30fps, and you want the middle tile column to be high bitrate, and the outer columns to be low bitrate. Furthermore, you want to use the default low and high bitrate values. The command would then be:
+
+    # chmod must be called once, after the encode object is first created
+    sudo chmod +x /path/to/encode
+    ./encode --input=input_video.yuv --output=output_video.hevc --width=3840 --height=2048 --fps=30 --num-tile-rows=2 --num-tile-cols=3 --tile-bitrates=001100
+
+## Videos
+
+I used the videos from the "360-Degree Videos Head Movements Dataset" at http://dash.ipv6.enstb.fr/headMovements/. I then used FFmpeg to trim the videos to a short length (e.g. 5s or 30s), then used FFmpeg to convert them to YUV420p files. Note that YUV420p is simply raw images one after another, so the file sizes can be extremely large. This is why one should first trim the video to a short length.
+
+To trim a video to a certain length, specify the start time with `-ss` and duration with `-t`. For example, to trim a video, starting 10s into the video, to a 30s video:
+
+    ffmpeg -i input_video.mp4 -ss 00:00:10 -t 00:00:30 -async 1 -strict -2 trimmed_video.mp4
+
+To convert to YUV, follow the below. Note that the `-r` option is the FPS, `-s:v` is the resolution, and `-vcodec` need not be `hevc_nvenc`, though it may take longer otherwise. Also, do not leave the curly braces; if you don't want to specify, e.g., a preset, just remove that whole thing:
+
+    ffmpeg -f rawvideo -s:v 3840x2048 -r 30 -pix_fmt yuv420p -i input_vid.yuv -vcodec hevc_nvenc {OPTIONS, e.g. -preset slow, GO HERE} output_vid.hevc
 
 # System Overview
 
-There are two primary source files, nvenc_encode.c and stitch.cpp. Nvenc_encode.c is the main file, with stitch.cpp being called only to do the stitching. The whole pipeline repeats for each frame in the source YUV420p video, and consists of the following steps:
+There are two primary source files, nvenc\_encode.c and stitch.cpp. Nvenc\_encode.c is the main file, with stitch.cpp being called only to do the stitching. The whole pipeline repeats for each frame in the source YUV420p video, and consists of the following steps:
 
 
-1. Read the next frame from the source file (nvenc_encode.c)
-2. Rearrange the pixels in the frame (nvenc_encode.c)
-3. Send the rearranged frame to NVENC (nvenc_encode.c)
-4. Get the bitstreams from NVENC (nvenc_encode.c)
+1. Read the next frame from the source file (nvenc\_encode.c)
+2. Rearrange the pixels in the frame (nvenc\_encode.c)
+3. Send the rearranged frame to NVENC (nvenc\_encode.c)
+4. Get the bitstreams from NVENC (nvenc\_encode.c)
 5. Perform stitching to get the final frame bitstream (stitch.cpp)
-6. Write the frame bitstream to a file (nvenc_encode.c)
+6. Write the frame bitstream to a file (nvenc\_encode.c)
 
 
-We mix C and C++ because interactions with NVENC are handled via the ffmpeg APIs. This simplifies the process of using NVENC greatly, but these libraries are written in C. C++ is used for the stitching because the bitstream is manipulated via the Boost dynamic_bitset API, which is one of the few libraries available to modify bitstreams, and the easiest to understand. Interaction between these two is handled via a shared header file, link_stitcher.h, in which functions and variables common to both can be listed in an extern “C” block. Object files are then generated for either source file, which are linked by the compiler at the end to get the executable.
+We mix C and C++ because interactions with NVENC are handled via the ffmpeg APIs. This simplifies the process of using NVENC greatly, but these libraries are written in C. C++ is used for the stitching because the bitstream is manipulated via the Boost dynamic\_bitset API, which is one of the few libraries available to modify bitstreams, and the easiest to understand. Interaction between these two is handled via a shared header file, link\_stitcher.h, in which functions and variables common to both can be listed in an extern “C” block. Object files are then generated for either source file, which are linked by the compiler at the end to get the executable.
