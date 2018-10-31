@@ -42,7 +42,7 @@ If the stitching process modifies the number of bits in the NAL header by, e.g.,
 
 Byte alignment occurs at the end of a NAL header or NAL data. After the last semantic bit, a \texttt{1} is appended to the NAL section, followed by as many \texttt{0}s as necessary to complete the byte. As is the case with emulation prevention bytes, if the size of the NAL header changes during modification, we will likely have an incorrect number of trailing \texttt{0}s. To redo the byte alignment, we find the last \texttt{1} in the original NAL and remove it and everything after it, effectively undoing the previous byte alignment. We then perform byte alignment after our modifications have been made.
 
-Talk about dynamic\_bitstream and the fact that NVENC is predictable.
+The stitching process is performed with the Boost C++ dynamic\_bitstream API, which allows one to read bytes into a vector of bits, manipulate these bits, then convert the bit vector into raw bytes. The high- and low-bitrate configurations are identical except for the specified bitrate, and the resulting NAL headers do not change based on, e.g., content, so the output from NVENC is highly predictable. Therefore, navigating to the right spot in the bitstream and making our changes is a straightforward process.
 
 \renewcommand{\figurename}{Tab.}
 \setcounter{figure}{1}
@@ -59,10 +59,10 @@ Talk about dynamic\_bitstream and the fact that NVENC is predictable.
 		& \texttt{num\_tile\_columns\_minus1} & Number of tile colums minus 1. & \\ \cmidrule[0.5pt]{2-4}
 		& \texttt{num\_tile\_rows\_minus1} & Number of tile rows minus 1. & \\ \cmidrule[0.5pt]{2-4}
 		& \texttt{uniform\_spacing\_flag} & Whether tiles are evenly sized. If \texttt{0}, manual tile boundaries must be specified. & \texttt{1} \\ \cmidrule[0.5pt]{2-4}
-		& \texttt{loop\_filter\_across\_tiles\_enabled\_flag} & Whether in-loop filtering should be performed across tile boundaries. This is desired in our case because each tile represents one part of a single logical image. & \texttt{1} \\
+		& \texttt{loop\_filter\_across\_tiles\_enabled\_flag} & Whether in-loop filtering should be performed across tile boundaries. This is optional, and may be desired if there is less of a difference between the high and low bitrates. & \texttt{1} \\
 		\midrule[1pt]
 		\multirow{4}{*}[-6em]{\shortstack{I-slice, \\P-slice}} & \texttt{first\_slice\_segment\_in\_pic\_flag} & Should be \texttt{1} in the top-leftmost tile, and \texttt{0} in all other tiles. If \texttt{0}, the slice segment address must be specified. & \\ \cmidrule[0.5pt]{2-4}
-		& \texttt{slice\_segment\_address} & The address of the top-leftmost CTU in this tile. CTU addresses begin at 0 for the top-leftmost CTU in the whole image, and increment from left to right along the image, moving down and beginning from the left again once the right-hand edge of the image is reached. Note that CTU addresses ignore tile structure and are instead based on the whole image. & \\ \cmidrule[0.5pt]{2-4}
+		& \texttt{slice\_segment\_address} & The address of the top-leftmost CTU in this tile, beginning from 0 at the top-leftmost CTU in the entire image, and incrementing across the image, moving down and continuing at the end of the row.& \\ \cmidrule[0.5pt]{2-4}
 		& \texttt{slice\_loop\_filter\_across\_slices\_enabled\_flag} & Similar to the loop filter flag in the PPS, but specifically concerned with in-loop filtering across the left and top boundaries of the tile. & \texttt{1} \\ \cmidrule[0.5pt]{2-4}
 		& \texttt{num\_entry\_point\_offsets} & Used to treat \texttt{emulation\_prevention\_three\_byte} as part of the tile data, which is not desired here. & \texttt{1} \\
 		\bottomrule
@@ -74,10 +74,15 @@ Talk about dynamic\_bitstream and the fact that NVENC is predictable.
 \setcounter{figure}{2}
 
 \section{Installing and Using RATS}
-Configuring and using the software. Some implementation stuff could go here for our actual demo (e.g. using it while streaming with a real camera).
+RATS was developed and evaluated on Ubuntu 18.04, using CUDA 9.2, FFmpeg 3.4, and Boost 1.64. We use a slightly modified version of FFmpeg which sets \texttt{sliceModeData=3} and adds a new field, \texttt{numSlices}, to \texttt{AVCodecContext} so that we may specify the tile configuration at run-time. FFmpeg must be configured with CUDA support, and to produce static libraries.
+
+To build RATS, first clone the git repository \textbf{https://github.com/\\ballardt/nvenc-live}. Modify the paths in \texttt{build.sh} to point to the FFmpeg static libraries, then run it. The resulting executable, \texttt{encode}, is the RATS command-line program.
+
+More details on installation and usage can be found in the git repository.
 
 \section{Evaluation}
-- Tradeoff between tile size and coding/network transmission efficiency \\
-- Maybe encoding presets? We could find the best presets to use for the low/high settings based on output size, perceived quality (PSNR), encoding speed, etc.
+To evaluate RATS, we compare its performance to an existing tiling video encoder, investigate the impact on tile size and quality on performance, and measure the relative time of the rearranging, encoding, and stitching components.
+
+To the best of our knowledge, RATS contains the first available HEVC tile stitcher. Furthermore, RATS is the first GPU-powered tile-based encoder. It is therefore difficult to directly compare RATS to other programs; software-based tiling encoders will clearly be much slower and cannot be stitched, and GPU encoders without RATS simply perform one step of the RATS pipeline without the others. However, it is worthwhile to have some idea of how much more quickly this work is than existing software encoders. 
 
 \section{Conclusion}
