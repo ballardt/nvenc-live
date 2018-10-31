@@ -188,8 +188,11 @@ void nalToBitset(Bitset* bits, std::vector<Block>* nal) {
 	}
 }
 
+/**
+ * Could speed this up by simply copying the Blocks for NAL Data rather than
+ * appending the bits and converting to Blocks.
+ */
 void bitsetToNAL(std::vector<Block>* nal, Bitset* bits) {
-
 	// Reverse the order of each byte again for writing out
 	Bitset tempBits(9);
 	for (int i=0; i<bits->size()/8; i++) {
