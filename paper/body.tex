@@ -85,4 +85,20 @@ To evaluate RATS, we compare its performance to an existing tiling video encoder
 
 To the best of our knowledge, RATS contains the first available HEVC tile stitcher. Furthermore, RATS is the first GPU-powered tile-based encoder. It is therefore difficult to directly compare RATS to other programs; software-based tiling encoders will clearly be much slower and cannot be stitched, and GPU encoders without RATS simply perform one step of the RATS pipeline without the others. However, it is worthwhile to have some idea of how much more quickly this work is than existing software encoders. 
 
+\begin{figure}[t]
+	\includegraphics[width=\columnwidth]{figures/hevc_eval_qual.png}
+	\caption{Encoding speed vs. tile quality for $4\times4$ tiles. All tiles on the left are of the high bitrate, while those on the right are of the low bitrate.}
+\end{figure}
+
+\begin{figure}[t]
+	\includegraphics[width=\columnwidth]{figures/hevc_eval_size.png}
+	\caption{Encoding output size across tile configurations. In each case, half of the tiles are of a high bitrate, half are of a low bitrate, and tile qualities alternate in a checkerboard pattern.}
+\end{figure}
+
+\begin{figure}[t]
+	\includegraphics[width=\columnwidth]{figures/hevc_eval_time.png}
+	\caption{Encoding speed across tile configurations. The tile qualities alternate between high and low in a checkerboard pattern. Each configuration has an odd number of tiles, and we set the extra tile to be low quality. The video used was 30s long, so the red line indicates the speed necessary to achieve real-time ABR encoding.}
+\end{figure}
+
+
 \section{Conclusion}
