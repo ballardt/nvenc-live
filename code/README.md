@@ -1,3 +1,12 @@
+# Notes for Carsten
+
+* Commit `0d13188`, "Pass the number of slices...": Prior to this, `713cbd4`, "Switch to 6 slices" must be the FFmpeg version. After rolling back, simply re-install via the commands below. Only FFmpeg must be re-installed, not the prerequisites (like CUDA SDK). To use a different number of horizontal slices than 6, change `sliceModeData` to a different value (check the commit to see exactly where in nvenc.c to change).
+
+* Commit `0fd9d34`, "Tile rows and cols now...": This and some of the preceding commits add CLI functionality, but are slight misnomers because it is still assumed that the video has 6 or fewer tiles. For example, the tile bitrates are still hardcoded. The CLI as it currently is isn't finished until commit `0d402d86`, "Don't process NAL data...".
+
+* Commit `5382610`, "Stiching works": Prior to this, the pipeline is not functional.
+
+
 # Introduction
 
 RATS was built using Ubuntu 17 and a GTX 1080 Ti. Any recent Ubuntu distro and a GPU with NVENCODE should work, but may require changes to the installation process. The goal of RATS is to encode a raw video file (YUV420p) into an HEVC bitstream in real-time in such a way that different parts of the video are encoded at different bitrates. This is accomplished by rearranging the pixels in the source then encoding each frame twice--once at a high bitrate, and once at a low one. Finally, the resulting bitstreams are stitched together into a single image containing some high-bitrate parts and some low-bitrate parts, and the pieces that aren’t used in the final image are simply discarded.
