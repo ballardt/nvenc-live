@@ -14,3 +14,4 @@ find_package(LibAV COMPONENTS avcodec avutil swresample)
 
 add_subdirectory(code)
 
+configure_file(runEval.sh.in runEval.sh @ONLY)

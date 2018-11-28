@@ -1,0 +1,65 @@
+#!/bin/bash
+
+ENCODE=./code/encode
+INPUTPATH=../eval/videos
+VIDEO=nyc_30s_3840x2048.yuv
+WH="--width=3840 --height=2048"
+# VIDEO=wingsuit.yuv
+# WH="--width=1280 --height=720"
+
+cd @CMAKE_CURRENT_BINARY_DIR@
+
+rm -rf time filesize qualSize
+mkdir -p time
+mkdir -p filesize
+mkdir -p qualSize
+
+if true;
+then
+    # <rows>x<columns>
+    echo "Encode/stitch time vs. tiles"
+    echo "2x3"
+    echo ${ENCODE} --input=${INPUTPATH}/${VIDEO} --output=time/2x3.hevc ${WH} --fps=25 --num-tile-rows=2 --num-tile-cols=3 --tile-bitrates=101010
+    ${ENCODE} --input=${INPUTPATH}/${VIDEO} --output=time/2x3.hevc ${WH} --fps=25 --num-tile-rows=2 --num-tile-cols=3 --tile-bitrates=101010
+    echo "3x2"
+    echo ${ENCODE} --input=${INPUTPATH}/${VIDEO} --output=time/3x2.hevc ${WH} --fps=25 --num-tile-rows=3 --num-tile-cols=2 --tile-bitrates=101010
+    ${ENCODE} --input=${INPUTPATH}/${VIDEO} --output=time/3x2.hevc ${WH} --fps=25 --num-tile-rows=3 --num-tile-cols=2 --tile-bitrates=101010
+else
+    # for run in {1..10}
+    for run in 1
+    do
+        # <rows>x<columns>
+        echo "Encode/stitch time vs. tiles"
+        echo "1x3"
+        echo ${ENCODE} --input=${INPUTPATH}/${VIDEO} --output=time/1x3.hevc ${WH} --fps=25 --num-tile-rows=1 --num-tile-cols=3 --tile-bitrates=101
+        time ${ENCODE} --input=${INPUTPATH}/${VIDEO} --output=time/1x3.hevc ${WH} --fps=25 --num-tile-rows=1 --num-tile-cols=3 --tile-bitrates=101
+        echo "3x1"
+        time ${ENCODE} --input=${INPUTPATH}/${VIDEO} --output=time/3x1.hevc ${WH} --fps=25 --num-tile-rows=3 --num-tile-cols=1 --tile-bitrates=101
+        echo "3x3"
+        time ${ENCODE} --input=${INPUTPATH}/${VIDEO} --output=time/3x3.hevc ${WH} --fps=25 --num-tile-rows=3 --num-tile-cols=3 --tile-bitrates=101010101
+        echo "5x5"
+        time ${ENCODE} --input=${INPUTPATH}/${VIDEO} --output=time/5x5.hevc ${WH} --fps=25 --num-tile-rows=5 --num-tile-cols=5 --tile-bitrates=1010101010101010101010101
+        echo "9x9"
+        time ${ENCODE} --input=${INPUTPATH}/${VIDEO} --output=time/9x9.hevc ${WH} --fps=25 --num-tile-rows=9 --num-tile-cols=9 --tile-bitrates="$(printf '10%.0s' {1..40})1"
+
+        echo "Output filesize vs. tiles"
+        echo "1x2"
+        time ${ENCODE} --input=${INPUTPATH}/${VIDEO} --output=filesize/1x2.hevc ${WH} --fps=25 --num-tile-rows=1 --num-tile-cols=2 --tile-bitrates=10
+        echo "2x1"
+        time ${ENCODE} --input=${INPUTPATH}/${VIDEO} --output=filesize/2x1.hevc ${WH} --fps=25 --num-tile-rows=2 --num-tile-cols=1 --tile-bitrates=10
+        echo "2x2"
+        time ${ENCODE} --input=${INPUTPATH}/${VIDEO} --output=filesize/2x2.hevc ${WH} --fps=25 --num-tile-rows=2 --num-tile-cols=2 --tile-bitrates=1010
+        echo "4x4"
+        time ${ENCODE} --input=${INPUTPATH}/${VIDEO} --output=filesize/4x4.hevc ${WH} --fps=25 --num-tile-rows=4 --num-tile-cols=4 --tile-bitrates=1010101010101010
+        echo "8x8"
+        time ${ENCODE} --input=${INPUTPATH}/${VIDEO} --output=filesize/8x8.hevc ${WH} --fps=25 --num-tile-rows=8 --num-tile-cols=8 --tile-bitrates="$(printf '10%.0s' {1..32})"
+
+        echo "All high tiles vs. all low tiles"
+        echo "3x3 for both"
+        echo "High"
+        time ${ENCODE} --input=${INPUTPATH}/${VIDEO} --output=qualSize/3x3_high.hevc ${WH} --fps=25 --num-tile-rows=3 --num-tile-cols=3 --tile-bitrates=000000000
+        echo "Low"
+        time ${ENCODE} --input=${INPUTPATH}/${VIDEO} --output=qualSize/3x3_low.hevc ${WH} --fps=25 --num-tile-rows=3 --num-tile-cols=3 --tile-bitrates=111111111
+    done
+fi
+
