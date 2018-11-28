@@ -4,6 +4,10 @@ add_executable(encode
     nvenc_encode.c
     stitch.cpp)
 
+target_include_directories(encode
+    PRIVATE
+    ${LIBAV_INCLUDE_DIRS})
+
 target_link_libraries(encode
     ${LIBAV_LIBRARIES})
 

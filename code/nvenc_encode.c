@@ -16,7 +16,7 @@
 
 #include "link_stitcher.h"
 
-#define NUM_SPLITS 3 // TODO replace with numTileCols; they're equivalent
+#define NUM_SPLITS (config->numTileCols)
 #define BITSTREAM_SIZE 200000 // Increase if necessary; the program will let you know
 
 static AVBufferRef* hwDeviceCtx = NULL;
@@ -49,6 +49,8 @@ typedef struct {
 	int numTileBitrates;
 } Config;
 int numTiles; // Should we pass instead? Makes sense to be global, but kind of sloppy
+
+Config* config = 0;
 
 /**
  * Get the next frame, consisting of a Y, U, and V component.
@@ -391,9 +393,10 @@ void processInput(Config* config, int argc, char* argv[]) {
 	}
 }
 
-int main(int argc, char* argv[]) {
+int main(int argc, char* argv[])
+{
 	// Process our inputs, set up our data structures
-	Config* config = (Config*)malloc(sizeof(Config));
+	config = (Config*)malloc(sizeof(Config));
 	processInput(config, argc, argv);
 	FILE* inFile = fopen(config->inputFilename, "rb");
 	if (inFile == NULL) {
