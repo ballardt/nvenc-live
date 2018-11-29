@@ -220,6 +220,8 @@ void initializeContext(Bitrate bitrate, int width, int height) {
 	codecContextArr[bitrate] = c;
 }
 
+FILE* dbg_file = 0;
+
 int sendFrameToNVENC(Bitrate bitrate, unsigned char* bitstream) {
 	int bsPos = 0;
 	pkt->data = NULL;
@@ -241,7 +243,9 @@ int sendFrameToNVENC(Bitrate bitrate, unsigned char* bitstream) {
 				printf("ERROR: frameSize > BITSTREAM_SIZE (%d > %d)\n", frameSize, BITSTREAM_SIZE);
 			}
 			//bsPos += pktSize;
-			//fwrite(pkt->data, 1, pkt->size, file);
+			dbg_file = fopen( "writeme.hevc", "a" );
+			fwrite(pkt->data, 1, pkt->size, dbg_file);
+			fclose(dbg_file);
 			av_packet_unref(pkt);
 			return frameSize;
 		}
@@ -253,7 +257,10 @@ int sendFrameToNVENC(Bitrate bitrate, unsigned char* bitstream) {
 		// Note: this never gets executed...
 		memcpy(bitstream+bsPos, pkt->data, pkt->size);
 		bsPos += pkt->size;
+		dbg_file = fopen( "writeme.hevc", "a" );
+		fwrite(pkt->data, 1, pkt->size, dbg_file);
 		//fwrite(pkt->data, 1, pkt->size, file);
+		fclose(dbg_file);
 		av_packet_unref(pkt);
 	}
 }
@@ -314,7 +321,8 @@ int* processTileBitrates(char* tileBitratesStr, Config* config) {
 /**
  * Process the command-line arguments to configure the program
  */
-void processInput(Config* config, int argc, char* argv[]) {
+void processInput(Config* config, int argc, char* argv[])
+{
 	// Default config options
 	config->highBitrate = 1600000;
 	config->lowBitrate = 800000;
@@ -398,6 +406,14 @@ int main(int argc, char* argv[])
 	// Process our inputs, set up our data structures
 	config = (Config*)malloc(sizeof(Config));
 	processInput(config, argc, argv);
+	int origHeight   = config->height;
+	int paddedHeight = config->height;
+	while( paddedHeight % ( 2 * config->numTileRows ) != 0 )
+	{
+		paddedHeight -= 1;
+	}
+	printf("Original height: %d Padded height: %d\n", origHeight, paddedHeight);
+
 	FILE* inFile = fopen(config->inputFilename, "rb");
 	if (inFile == NULL) {
 		printf("Error: could not open input file\n");
@@ -424,6 +440,7 @@ int main(int argc, char* argv[])
 
 	// The main loop. Get a frame, rearrange it, send it to NVENC, stitch it, then write it out.
 	while (getNextFrame(inFile, y, u, v, ySize)) {
+		config->height = paddedHeight;
 		bitstreamSizes[HIGH_BITRATE] = 0;
 		bitstreamSizes[LOW_BITRATE] = 0;
 
@@ -435,6 +452,7 @@ int main(int argc, char* argv[])
 										 config->width, config->height, config->numTileRows,
 										 config->numTileCols);
 		fwrite(tiledBitstream, sizeof(unsigned char), tiledBitstreamSize, outFile);
+		config->height = origHeight;
 	}
 
 	// Wrap up

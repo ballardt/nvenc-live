@@ -76,7 +76,8 @@ NALType getNALType(std::vector<Block>* nal) {
  *
  * Returns the NAL type, or -1 if there are no more NALs in the stream.
  */
-int getNextNAL(unsigned char* bytes, std::vector<Block>* buf, int* bytesPos, int bytesSize) {
+int getNextNAL(unsigned char* bytes, std::vector<Block>* buf, int* bytesPos, int bytesSize)
+{
 	if (*bytesPos >= bytesSize) {
 		return -1;
 	}
@@ -473,12 +474,13 @@ extern "C" int doStitching(unsigned char* tiledBitstream, unsigned char* bitstre
 	std::vector<Block> nal;
 
 	// Get as many NALs as we have in the stream
-	const int oldCtuOffsetBitSize = ceil(log2(((finalWidth/numTileCols)/32)*((finalHeight*numTileCols)/32)));
-	const int newCtuOffsetBitSize = ceil(log2((finalWidth/32)*(finalHeight/32)));
+    const int ctuSize = 32;
+	const int oldCtuOffsetBitSize = ceil(log2(((finalWidth/numTileCols)/ctuSize)*((finalHeight*numTileCols)/ctuSize)));
+	const int newCtuOffsetBitSize = ceil(log2((finalWidth/ctuSize)*(finalHeight/ctuSize)));
 	// TODO based on num tiles and layout
 	int numTiles = numTileRows * numTileCols;
-	int imgCtuWidth = finalWidth / 32;
-	int tileCtuHeight = (finalHeight / 32) / numTileRows;
+	int imgCtuWidth = finalWidth / ctuSize;
+	int tileCtuHeight = (finalHeight / ctuSize) / numTileRows;
 	int tileCtuWidth = imgCtuWidth / numTileCols;
 	int tileIdx;
 	int sliceSegAddrs[numTiles]; // 0 not used, but convenient for index
