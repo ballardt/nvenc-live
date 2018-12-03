@@ -454,6 +454,10 @@ int main(int argc, char* argv[])
 										 config->numTileCols);
 		fwrite(tiledBitstream, sizeof(unsigned char), tiledBitstreamSize, outFile);
 		config->height = origHeight;
+
+		y = realloc(y,sizeof(unsigned char)*ySize);
+		u = realloc(u,sizeof(unsigned char)*uvSize);
+		v = realloc(v,sizeof(unsigned char)*uvSize);
 	}
 
 	// Wrap up
