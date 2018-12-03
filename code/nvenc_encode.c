@@ -62,6 +62,7 @@ int getNextFrame(FILE* file, unsigned char* y, unsigned char* u, unsigned char* 
 	if (fread(y, sizeof(unsigned char), ySize, file) != ySize ||
 		fread(u, sizeof(unsigned char), uvSize, file) != uvSize ||
 		fread(v, sizeof(unsigned char), uvSize, file) != uvSize) {
+		perror("Problem");
 		return 0;
 	}
 	return 1;
