@@ -1,7 +1,7 @@
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BUINARY_DIR})
 
 add_executable(encode
-    nvenc_encode.c
+    nvenc_encode.cpp
     stitch.cpp)
 
 target_include_directories(encode

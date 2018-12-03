@@ -3,6 +3,10 @@
 #include <string.h>
 #include <getopt.h>
 
+#define __STDC_CONSTANT_MACROS
+
+extern "C"
+{
 #include "libavutil/common.h"
 #include "libavcodec/avcodec.h"
 #include "libavdevice/avdevice.h"
@@ -13,6 +17,7 @@
 #include "libavutil/hwcontext.h"
 #include "libswscale/swscale.h"
 #include "libpostproc/postprocess.h"
+};
 
 #include "link_stitcher.h"
 
@@ -28,6 +33,9 @@ AVCodecContext* codecContextArr[] = {NULL, NULL};
 AVFrame* frame = NULL;
 AVPacket* pkt;
 enum AVHWDeviceType hwDeviceType;
+
+unsigned char* bitstreams[2];
+unsigned char* tiledBitstream;
 
 typedef enum bitrate {
 	HIGH_BITRATE = 0,
@@ -48,16 +56,32 @@ typedef struct {
 	int* tileBitrates; // TODO
 	int numTileBitrates;
 } Config;
+
 int numTiles; // Should we pass instead? Makes sense to be global, but kind of sloppy
 
 Config* config = 0;
 
-typedef struct
+struct Planeset
 {
+public:
+    Planeset( int w, int h )
+    {
+        y = new unsigned char[w*h];
+        u = new unsigned char[w*h/4];
+        v = new unsigned char[w*h/4];
+    }
+
+    ~Planeset()
+    {
+        delete [] y;
+        delete [] u;
+        delete [] v;
+    }
+
 	unsigned char* y;
 	unsigned char* u;
 	unsigned char* v;
-} Planeset;
+};
 
 /**
  * Get the next frame, consisting of a Y, U, and V component.
@@ -70,7 +94,7 @@ int getNextFrame(FILE* file, Planeset* ptr, int ySize)
 	if (fread(ptr->y, sizeof(unsigned char), ySize, file) != ySize ||
 		fread(ptr->u, sizeof(unsigned char), uvSize, file) != uvSize ||
 		fread(ptr->v, sizeof(unsigned char), uvSize, file) != uvSize) {
-		perror("Problem");
+		perror("Problem in getNextFrame");
 		return 0;
 	}
 	return 1;
@@ -447,15 +471,8 @@ int main(int argc, char* argv[])
 	int bitstreamSizes[2];
 	int tiledBitstreamSize;
 
-	Planeset inputFrame;
-	inputFrame.y = malloc(sizeof(unsigned char)*ySize);
-	inputFrame.u = malloc(sizeof(unsigned char)*uvSize);
-	inputFrame.v = malloc(sizeof(unsigned char)*uvSize);
-
-	Planeset outputFrame;
-	outputFrame.y = malloc( sizeof(unsigned char) * config->width * paddedHeight );
-	outputFrame.u = malloc( sizeof(unsigned char) * config->width * paddedHeight / 4 );
-	outputFrame.v = malloc( sizeof(unsigned char) * config->width * paddedHeight / 4 );
+	Planeset inputFrame( config->width, config->height );
+	Planeset outputFrame( config->width/NUM_SPLITS, paddedHeight*NUM_SPLITS );
 
 	bitstreams[HIGH_BITRATE] = (unsigned char*)malloc(sizeof(unsigned char) * BITSTREAM_SIZE);
 	bitstreams[LOW_BITRATE] = (unsigned char*)malloc(sizeof(unsigned char) * BITSTREAM_SIZE);
@@ -463,20 +480,24 @@ int main(int argc, char* argv[])
 
 	// The main loop. Get a frame, rearrange it, send it to NVENC, stitch it, then write it out.
 	while (getNextFrame(inFile, &inputFrame, ySize)) {
-		config->height = paddedHeight;
+		// config->height = paddedHeight;
 		bitstreamSizes[HIGH_BITRATE] = 0;
 		bitstreamSizes[LOW_BITRATE] = 0;
 
-		rearrangeFrame( &inputFrame, &outputFrame, config->width, config->height );
+		rearrangeFrame( &inputFrame, &outputFrame, config->width, paddedHeight );
 		encodeFrame(outputFrame.y, outputFrame.u, outputFrame.v,
-		            config->width/NUM_SPLITS, config->height*NUM_SPLITS, bitstreamSizes);
-		tiledBitstreamSize = doStitching(tiledBitstream, bitstreams[HIGH_BITRATE],
-										 bitstreams[LOW_BITRATE], bitstreamSizes[HIGH_BITRATE],
-										 bitstreamSizes[LOW_BITRATE], config->tileBitrates,
-										 config->width, config->height, config->numTileRows,
+		            config->width/NUM_SPLITS, paddedHeight*NUM_SPLITS, bitstreamSizes);
+		tiledBitstreamSize = doStitching(tiledBitstream,
+                                         bitstreams[HIGH_BITRATE],
+										 bitstreams[LOW_BITRATE],
+                                         bitstreamSizes[HIGH_BITRATE],
+										 bitstreamSizes[LOW_BITRATE],
+                                         config->tileBitrates,
+										 config->width, paddedHeight,
+                                         config->numTileRows,
 										 config->numTileCols);
 		fwrite(tiledBitstream, sizeof(unsigned char), tiledBitstreamSize, outFile);
-		config->height = origHeight;
+		// config->height = origHeight;
 	}
 
 	// Wrap up
@@ -487,12 +508,6 @@ int main(int argc, char* argv[])
 	av_frame_free(&frame);
 	av_packet_free(&pkt);
 	av_buffer_unref(&hwDeviceCtx);
-	free(inputFrame.y);
-	free(inputFrame.u);
-	free(inputFrame.v);
-	free(outputFrame.y);
-	free(outputFrame.u);
-	free(outputFrame.v);
 	free(bitstreams[HIGH_BITRATE]);
 	free(bitstreams[LOW_BITRATE]);
 	free(tiledBitstream);
