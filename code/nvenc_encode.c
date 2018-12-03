@@ -52,16 +52,24 @@ int numTiles; // Should we pass instead? Makes sense to be global, but kind of s
 
 Config* config = 0;
 
+typedef struct
+{
+	unsigned char* y;
+	unsigned char* u;
+	unsigned char* v;
+} Planeset;
+
 /**
  * Get the next frame, consisting of a Y, U, and V component.
  * Returns 1 if a frame was available, or 0 if there are no frames left in the file
  */
-int getNextFrame(FILE* file, unsigned char* y, unsigned char* u, unsigned char* v, int ySize) {
+int getNextFrame(FILE* file, Planeset* ptr, int ySize)
+{
 	int uvSize = ySize / 4;
 	int yRes, uRes, vRes;
-	if (fread(y, sizeof(unsigned char), ySize, file) != ySize ||
-		fread(u, sizeof(unsigned char), uvSize, file) != uvSize ||
-		fread(v, sizeof(unsigned char), uvSize, file) != uvSize) {
+	if (fread(ptr->y, sizeof(unsigned char), ySize, file) != ySize ||
+		fread(ptr->u, sizeof(unsigned char), uvSize, file) != uvSize ||
+		fread(ptr->v, sizeof(unsigned char), uvSize, file) != uvSize) {
 		perror("Problem");
 		return 0;
 	}
@@ -71,40 +79,38 @@ int getNextFrame(FILE* file, unsigned char* y, unsigned char* u, unsigned char* 
 /**
  * Cut a frame component (Y, U, or V) into thirds and stack them on top of each other.
  */
-void rearrangeFrameComponent(unsigned char** component, int origWidth, int origHeight,
-							 int numSplits) {
-	int oldIdx, newIdx;
+void rearrangeFrameComponent(unsigned char* inComponent, unsigned char* outComponent,
+                             int origWidth, int origHeight,
+							 int numSplits)
+{
 	int newWidth = origWidth / numSplits;
-	unsigned char* rearranged = (unsigned char*)malloc(sizeof(unsigned char) * origWidth * origHeight);
 	for (int i=0; i<numSplits; i++) {
 		for (int j=0; j<origHeight; j++) {
-			oldIdx = (i*newWidth) + (j*origWidth);
-			newIdx = (j*newWidth) + (i*origHeight*newWidth);
-			memcpy(rearranged+newIdx, (*component)+oldIdx, newWidth); 
+			int oldIdx = (i*newWidth) + (j*origWidth);
+			int newIdx = (j*newWidth) + (i*origHeight*newWidth);
+			memcpy( outComponent+newIdx, inComponent+oldIdx, newWidth ); 
 		}
 	}
-
-	unsigned char* temp = *component;
-	*component = rearranged;
-	free(temp);
 }
 
 /**
  * Cut a frame into thirds and stack them on top of each other.
  */
-void rearrangeFrame(unsigned char** yPtr, unsigned char** uPtr, unsigned char** vPtr, int yWidth,
-					int yHeight) {
+void rearrangeFrame( Planeset* input, Planeset* output, int yWidth,
+					int yHeight)
+{
 	int uvWidth = yWidth / 2;
 	int uvHeight = yHeight / 2;
-	rearrangeFrameComponent(yPtr, yWidth, yHeight, NUM_SPLITS);
-	rearrangeFrameComponent(uPtr, uvWidth, uvHeight, NUM_SPLITS);
-	rearrangeFrameComponent(vPtr, uvWidth, uvHeight, NUM_SPLITS);
+	rearrangeFrameComponent( input->y, output->y, yWidth, yHeight, NUM_SPLITS);
+	rearrangeFrameComponent( input->u, output->u, uvWidth, uvHeight, NUM_SPLITS);
+	rearrangeFrameComponent( input->v, output->v, uvWidth, uvHeight, NUM_SPLITS);
 }
 
 /**
  * Initialize the hardware context. This should be the very first thing to happen.
  */
-void initializeHardware() {
+void initializeHardware()
+{
 	av_log_set_level(40);
 	// Load the hardware
 	hwDeviceType = av_hwdevice_find_type_by_name("cuda");
@@ -437,21 +443,30 @@ int main(int argc, char* argv[])
 	int uvSize = ySize / 4;
 	int bitstreamSizes[2];
 	int tiledBitstreamSize;
-	unsigned char* y = malloc(sizeof(unsigned char)*ySize);
-	unsigned char* u = malloc(sizeof(unsigned char)*uvSize);
-	unsigned char* v = malloc(sizeof(unsigned char)*uvSize);
+
+	Planeset inputFrame;
+	inputFrame.y = malloc(sizeof(unsigned char)*ySize);
+	inputFrame.u = malloc(sizeof(unsigned char)*uvSize);
+	inputFrame.v = malloc(sizeof(unsigned char)*uvSize);
+
+	Planeset outputFrame;
+	outputFrame.y = malloc( sizeof(unsigned char) * config->width * paddedHeight );
+	outputFrame.u = malloc( sizeof(unsigned char) * config->width * paddedHeight / 4 );
+	outputFrame.v = malloc( sizeof(unsigned char) * config->width * paddedHeight / 4 );
+
 	bitstreams[HIGH_BITRATE] = (unsigned char*)malloc(sizeof(unsigned char) * BITSTREAM_SIZE);
 	bitstreams[LOW_BITRATE] = (unsigned char*)malloc(sizeof(unsigned char) * BITSTREAM_SIZE);
 	tiledBitstream = (unsigned char*)malloc(sizeof(unsigned char) * BITSTREAM_SIZE);
 
 	// The main loop. Get a frame, rearrange it, send it to NVENC, stitch it, then write it out.
-	while (getNextFrame(inFile, y, u, v, ySize)) {
+	while (getNextFrame(inFile, &inputFrame, ySize)) {
 		config->height = paddedHeight;
 		bitstreamSizes[HIGH_BITRATE] = 0;
 		bitstreamSizes[LOW_BITRATE] = 0;
 
-		rearrangeFrame(&y, &u, &v, config->width, config->height);
-		encodeFrame(y, u, v, config->width/NUM_SPLITS, config->height*NUM_SPLITS, bitstreamSizes);
+		rearrangeFrame( &inputFrame, &outputFrame, config->width, config->height );
+		encodeFrame(outputFrame.y, outputFrame.u, outputFrame.v,
+		            config->width/NUM_SPLITS, config->height*NUM_SPLITS, bitstreamSizes);
 		tiledBitstreamSize = doStitching(tiledBitstream, bitstreams[HIGH_BITRATE],
 										 bitstreams[LOW_BITRATE], bitstreamSizes[HIGH_BITRATE],
 										 bitstreamSizes[LOW_BITRATE], config->tileBitrates,
@@ -459,10 +474,6 @@ int main(int argc, char* argv[])
 										 config->numTileCols);
 		fwrite(tiledBitstream, sizeof(unsigned char), tiledBitstreamSize, outFile);
 		config->height = origHeight;
-
-		y = realloc(y,sizeof(unsigned char)*ySize);
-		u = realloc(u,sizeof(unsigned char)*uvSize);
-		v = realloc(v,sizeof(unsigned char)*uvSize);
 	}
 
 	// Wrap up
@@ -473,9 +484,12 @@ int main(int argc, char* argv[])
 	av_frame_free(&frame);
 	av_packet_free(&pkt);
 	av_buffer_unref(&hwDeviceCtx);
-	free(y);
-	free(u);
-	free(v);
+	free(inputFrame.y);
+	free(inputFrame.u);
+	free(inputFrame.v);
+	free(outputFrame.y);
+	free(outputFrame.u);
+	free(outputFrame.v);
 	free(bitstreams[HIGH_BITRATE]);
 	free(bitstreams[LOW_BITRATE]);
 	free(tiledBitstream);
