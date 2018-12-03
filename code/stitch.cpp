@@ -461,16 +461,23 @@ void modifyPSlice(std::vector<Block>* nal, bool isFirstSlice, int ctuOffset, int
 	doneEditingNAL(nal, &newBits, &oldBits, oldBitsPos, false, true);
 }
 
-extern "C" int doStitching(unsigned char* tiledBitstream, unsigned char* bitstream_0,
-						   unsigned char* bitstream_1, int bitstream_0Size, int bitstream_1Size,
-						   int* tileBitrates, int finalWidth, int finalHeight, int numTileRows,
-						   int numTileCols) {
+extern "C" int doStitching( unsigned char* tiledBitstream,
+                            int            num,
+                            unsigned char* bitstream[],
+                            int            bitstream_Size[],
+						    int*           tileBitrates,
+                            int            finalWidth,
+                            int            finalHeight,
+                            int            numTileRows,
+						    int            numTileCols)
+{
 	int totalSize = 0;
 	int tbPos = 0;
-	int* bitstream_0Pos = (int*)malloc(sizeof(int));
-	int* bitstream_1Pos = (int*)malloc(sizeof(int));
-	*bitstream_0Pos = 0;
-	*bitstream_1Pos = 0;
+	int* bitstream_Pos[4];
+    bitstream_Pos[0] = new int( 0 );
+    bitstream_Pos[1] = new int( 0 );
+    bitstream_Pos[2] = new int( 0 );
+    bitstream_Pos[3] = new int( 0 );
 	std::vector<Block> nal;
 
 	// Get as many NALs as we have in the stream
@@ -496,11 +503,14 @@ extern "C" int doStitching(unsigned char* tiledBitstream, unsigned char* bitstre
 	int i = 0;
 	int nalType;
 	int ifs_idx = -1;
-	while (true) {
-		for (int ifs_idx=0; ifs_idx<2; ifs_idx++) {
-			nalType = getNextNAL((ifs_idx == 0 ? bitstream_0 : bitstream_1), &nal,
-								 (ifs_idx == 0 ? bitstream_0Pos : bitstream_1Pos),
-								 (ifs_idx == 0 ? bitstream_0Size : bitstream_1Size));
+	while (true)
+    {
+		for (int ifs_idx=0; ifs_idx<num; ifs_idx++)
+        {
+			nalType = getNextNAL( bitstream[ifs_idx],
+                                  &nal,
+                                  bitstream_Pos[ifs_idx],
+                                  bitstream_Size[ifs_idx] );
 			// Low qual on left and right, high in middle
 			switch (nalType) {
 				case P_SLICE:
@@ -510,7 +520,7 @@ extern "C" int doStitching(unsigned char* tiledBitstream, unsigned char* bitstre
 						std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
 						totalSize += nal.size();
 					}
-					if (ifs_idx == 1) i++;
+					if (ifs_idx == num-1) i++;
 					break;
 				case I_SLICE:
 					if (tileBitrates[i] == ifs_idx) {
@@ -519,7 +529,7 @@ extern "C" int doStitching(unsigned char* tiledBitstream, unsigned char* bitstre
 						std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
 						totalSize += nal.size();
 					}
-					if (ifs_idx == 1) i++;
+					if (ifs_idx == num-1) i++;
 					break;
 				case SPS:
 					if (ifs_idx==0) {
@@ -541,7 +551,7 @@ extern "C" int doStitching(unsigned char* tiledBitstream, unsigned char* bitstre
 						std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
 						totalSize += nal.size();
 					}
-					if (ifs_idx == 1) i = 0;
+					if (ifs_idx == num-1) i = 0;
 					break;
 				case OTHER:
 					break;
@@ -552,7 +562,9 @@ extern "C" int doStitching(unsigned char* tiledBitstream, unsigned char* bitstre
 		}
 	}
  done:
-	free(bitstream_0Pos);
-	free(bitstream_1Pos);
+    for( int i=0; i<4; i++ )
+    {
+        delete bitstream_Pos[i];
+    }
 	return totalSize;
 }

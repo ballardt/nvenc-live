@@ -29,21 +29,25 @@ static enum AVPixelFormat hwPixFmt;
 static int hardwareInitialized = 0;
 const char* codecName;
 const AVCodec* codec;
-AVCodecContext* codecContextArr[] = {NULL, NULL};
+AVCodecContext* codecContextArr[] = {NULL, NULL, NULL, NULL};
 AVFrame* frame = NULL;
 AVPacket* pkt;
 enum AVHWDeviceType hwDeviceType;
 
-unsigned char* bitstreams[2];
+unsigned char* bitstreams[4];
 unsigned char* tiledBitstream;
 
-typedef enum bitrate {
+enum Bitrate
+{
 	HIGH_BITRATE = 0,
+	MEDIUM_HIGH_BITRATE,
+	MEDIUM_LOW_BITRATE,
 	LOW_BITRATE
-} Bitrate;
-int bitrateValues[2];
+};
+int bitrateValues[4];
 
-typedef struct {
+struct Config
+{
 	char* inputFilename;
 	char* outputFilename;
 	int width;
@@ -55,7 +59,7 @@ typedef struct {
 	int numTileRows; // TODO
 	int* tileBitrates; // TODO
 	int numTileBitrates;
-} Config;
+};
 
 int numTiles; // Should we pass instead? Makes sense to be global, but kind of sloppy
 
@@ -181,7 +185,8 @@ static enum AVPixelFormat getHwFormat(AVCodecContext *ctx, const enum AVPixelFor
  * Initialize a context object for a given bitrate. This should occur after the hardware 
  * initialization.
  */
-void initializeContext(Bitrate bitrate, int width, int height) {
+void initializeContext(Bitrate bitrate, int width, int height)
+{
 	// Allocate codec context. This is the struct with all of the parameters that
 	// will be used when running the encoder, like bit rate, width/height, and GOP
 	int ret;
@@ -253,7 +258,8 @@ void initializeContext(Bitrate bitrate, int width, int height) {
 
 FILE* dbg_file = 0;
 
-int sendFrameToNVENC(Bitrate bitrate, unsigned char* bitstream) {
+int sendFrameToNVENC(Bitrate bitrate, unsigned char* bitstream)
+{
 	int bsPos = 0;
 	pkt->data = NULL;
 	pkt->size = 0;
@@ -274,7 +280,7 @@ int sendFrameToNVENC(Bitrate bitrate, unsigned char* bitstream) {
 				printf("ERROR: frameSize > BITSTREAM_SIZE (%d > %d)\n", frameSize, BITSTREAM_SIZE);
 			}
 			//bsPos += pktSize;
-#if 0
+#if 1
 			dbg_file = fopen( "writeme.hevc", "ab" );
 			fwrite(pkt->data, 1, pkt->size, dbg_file);
 			fclose(dbg_file);
@@ -290,7 +296,7 @@ int sendFrameToNVENC(Bitrate bitrate, unsigned char* bitstream) {
 		// Note: this never gets executed...
 		memcpy(bitstream+bsPos, pkt->data, pkt->size);
 		bsPos += pkt->size;
-#if 0
+#if 1
 		dbg_file = fopen( "writeme.hevc", "ab" );
 		fwrite(pkt->data, 1, pkt->size, dbg_file);
 		fclose(dbg_file);
@@ -326,14 +332,20 @@ void putImageInFrame(unsigned char* y, unsigned char* u, unsigned char* v,
  * Encode a frame twice, once at a high bitrate and once at a low one.
  */
 void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width,
-				 int height, int bitstreamSizes[2]) {
-	if (codecContextArr[0] == NULL) {
+				 int height, int bitstreamSizes[4])
+{
+	if (codecContextArr[0] == NULL)
+    {
 		initializeHardware();
 		initializeContext(HIGH_BITRATE, width, height);
+		initializeContext(MEDIUM_HIGH_BITRATE, width, height);
+		initializeContext(MEDIUM_LOW_BITRATE, width, height);
 		initializeContext(LOW_BITRATE, width, height);
 	}
 	putImageInFrame(y, u, v, width, height);
 	bitstreamSizes[HIGH_BITRATE] = sendFrameToNVENC(HIGH_BITRATE, bitstreams[HIGH_BITRATE]);
+	bitstreamSizes[MEDIUM_HIGH_BITRATE] = sendFrameToNVENC(MEDIUM_HIGH_BITRATE, bitstreams[MEDIUM_HIGH_BITRATE]);
+	bitstreamSizes[MEDIUM_LOW_BITRATE] = sendFrameToNVENC(MEDIUM_LOW_BITRATE, bitstreams[MEDIUM_LOW_BITRATE]);
 	bitstreamSizes[LOW_BITRATE] = sendFrameToNVENC(LOW_BITRATE, bitstreams[LOW_BITRATE]);
 }
 
@@ -341,7 +353,8 @@ void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width
  * Process tile bitrates
  * Implementation is sloppy, should be changed to be a file in the future
  */
-int* processTileBitrates(char* tileBitratesStr, Config* config) {
+int* processTileBitrates(char* tileBitratesStr, Config* config)
+{
 	int tbsLen = strlen(tileBitratesStr);
 	int* tileBitrates = (int*)malloc(sizeof(int) * tbsLen);
 	for (int i=0; i<strlen(tileBitratesStr); i++) {
@@ -359,7 +372,7 @@ void processInput(Config* config, int argc, char* argv[])
 {
 	// Default config options
 	config->highBitrate = 1600000;
-	config->lowBitrate = 800000;
+	config->lowBitrate  =  800000;
 	config->numTileCols = 3;
 	config->numTileRows = 1;
 	config->inputFilename = NULL;
@@ -463,35 +476,41 @@ int main(int argc, char* argv[])
 		printf("Error: could not open output file\n");
 		return 1;
 	}
-	bitrateValues[HIGH_BITRATE] = config->highBitrate;
-	bitrateValues[LOW_BITRATE] = config->lowBitrate;
+	bitrateValues[HIGH_BITRATE]        = config->highBitrate;
+	bitrateValues[MEDIUM_HIGH_BITRATE] = config->highBitrate;
+	bitrateValues[MEDIUM_LOW_BITRATE]  = config->lowBitrate;
+	bitrateValues[LOW_BITRATE]         = config->lowBitrate;
 	numTiles = config->numTileRows * config->numTileCols;
 	int ySize = config->width * config->height;
 	int uvSize = ySize / 4;
-	int bitstreamSizes[2];
+	int bitstreamSizes[4];
 	int tiledBitstreamSize;
 
 	Planeset inputFrame( config->width, config->height );
 	Planeset outputFrame( config->width/NUM_SPLITS, paddedHeight*NUM_SPLITS );
 
 	bitstreams[HIGH_BITRATE] = (unsigned char*)malloc(sizeof(unsigned char) * BITSTREAM_SIZE);
+	bitstreams[MEDIUM_HIGH_BITRATE] = (unsigned char*)malloc(sizeof(unsigned char) * BITSTREAM_SIZE);
+	bitstreams[MEDIUM_LOW_BITRATE] = (unsigned char*)malloc(sizeof(unsigned char) * BITSTREAM_SIZE);
 	bitstreams[LOW_BITRATE] = (unsigned char*)malloc(sizeof(unsigned char) * BITSTREAM_SIZE);
 	tiledBitstream = (unsigned char*)malloc(sizeof(unsigned char) * BITSTREAM_SIZE);
 
 	// The main loop. Get a frame, rearrange it, send it to NVENC, stitch it, then write it out.
-	while (getNextFrame(inFile, &inputFrame, ySize)) {
+	while (getNextFrame(inFile, &inputFrame, ySize))
+    {
 		// config->height = paddedHeight;
 		bitstreamSizes[HIGH_BITRATE] = 0;
+		bitstreamSizes[MEDIUM_HIGH_BITRATE] = 0;
+		bitstreamSizes[MEDIUM_LOW_BITRATE] = 0;
 		bitstreamSizes[LOW_BITRATE] = 0;
 
 		rearrangeFrame( &inputFrame, &outputFrame, config->width, paddedHeight );
 		encodeFrame(outputFrame.y, outputFrame.u, outputFrame.v,
 		            config->width/NUM_SPLITS, paddedHeight*NUM_SPLITS, bitstreamSizes);
 		tiledBitstreamSize = doStitching(tiledBitstream,
-                                         bitstreams[HIGH_BITRATE],
-										 bitstreams[LOW_BITRATE],
-                                         bitstreamSizes[HIGH_BITRATE],
-										 bitstreamSizes[LOW_BITRATE],
+                                         4,
+                                         bitstreams,
+                                         bitstreamSizes,
                                          config->tileBitrates,
 										 config->width, paddedHeight,
                                          config->numTileRows,
@@ -502,16 +521,23 @@ int main(int argc, char* argv[])
 
 	// Wrap up
 	sendFrameToNVENC(HIGH_BITRATE, bitstreams[HIGH_BITRATE]);
+	sendFrameToNVENC(MEDIUM_HIGH_BITRATE, bitstreams[MEDIUM_HIGH_BITRATE]);
+    sendFrameToNVENC(MEDIUM_LOW_BITRATE, bitstreams[MEDIUM_LOW_BITRATE]);
     sendFrameToNVENC(LOW_BITRATE, bitstreams[LOW_BITRATE]);
 	avcodec_free_context(&codecContextArr[HIGH_BITRATE]);
+	avcodec_free_context(&codecContextArr[MEDIUM_HIGH_BITRATE]);
+	avcodec_free_context(&codecContextArr[MEDIUM_LOW_BITRATE]);
 	avcodec_free_context(&codecContextArr[LOW_BITRATE]);
 	av_frame_free(&frame);
 	av_packet_free(&pkt);
 	av_buffer_unref(&hwDeviceCtx);
 	free(bitstreams[HIGH_BITRATE]);
+	free(bitstreams[MEDIUM_HIGH_BITRATE]);
+	free(bitstreams[MEDIUM_LOW_BITRATE]);
 	free(bitstreams[LOW_BITRATE]);
 	free(tiledBitstream);
 	free(config);
 	fclose(inFile);
 	fclose(outFile);
 }
+
