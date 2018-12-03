@@ -409,7 +409,12 @@ int main(int argc, char* argv[])
 	processInput(config, argc, argv);
 	int origHeight   = config->height;
 	int paddedHeight = config->height;
-	while( paddedHeight % ( 2 * config->numTileRows ) != 0 )
+	while( config->numTileCols * paddedHeight > 8192 )
+	{
+		paddedHeight -= 1;
+	}
+	printf("Original height: %d Padded height: %d\n", origHeight, paddedHeight);
+	while( paddedHeight % ( config->numTileRows * 32 ) != 0 )
 	{
 		paddedHeight -= 1;
 	}
