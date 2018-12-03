@@ -250,9 +250,11 @@ int sendFrameToNVENC(Bitrate bitrate, unsigned char* bitstream) {
 				printf("ERROR: frameSize > BITSTREAM_SIZE (%d > %d)\n", frameSize, BITSTREAM_SIZE);
 			}
 			//bsPos += pktSize;
+#if 0
 			dbg_file = fopen( "writeme.hevc", "ab" );
 			fwrite(pkt->data, 1, pkt->size, dbg_file);
 			fclose(dbg_file);
+#endif
 			av_packet_unref(pkt);
 			return frameSize;
 		}
@@ -264,10 +266,11 @@ int sendFrameToNVENC(Bitrate bitrate, unsigned char* bitstream) {
 		// Note: this never gets executed...
 		memcpy(bitstream+bsPos, pkt->data, pkt->size);
 		bsPos += pkt->size;
+#if 0
 		dbg_file = fopen( "writeme.hevc", "ab" );
 		fwrite(pkt->data, 1, pkt->size, dbg_file);
-		//fwrite(pkt->data, 1, pkt->size, file);
 		fclose(dbg_file);
+#endif
 		av_packet_unref(pkt);
 	}
 }
