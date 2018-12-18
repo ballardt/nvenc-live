@@ -23,13 +23,14 @@ extern "C"
 
 #define NUM_SPLITS (config->numTileCols)
 #define BITSTREAM_SIZE 200000 // Increase if necessary; the program will let you know
+#define MAX_Y_HEIGHT 8192 // Hardware limitation
 
 static AVBufferRef* hwDeviceCtx = NULL;
 static enum AVPixelFormat hwPixFmt;
 static int hardwareInitialized = 0;
 const char* codecName;
 const AVCodec* codec;
-AVCodecContext* codecContextArr[] = {NULL, NULL, NULL, NULL};
+vector<vector<AVCodecContext*>> codecContextArr(2); // 1st dimension is bitrate, 2nd is context group
 AVFrame* frame = NULL;
 AVPacket* pkt;
 enum AVHWDeviceType hwDeviceType;
@@ -40,11 +41,16 @@ unsigned char* tiledBitstream;
 enum Bitrate
 {
 	HIGH_BITRATE = 0,
-	MEDIUM_HIGH_BITRATE,
-	MEDIUM_LOW_BITRATE,
 	LOW_BITRATE
 };
 int bitrateValues[4];
+
+struct ContextGroup
+{
+	int numTiles;
+	int height; // INCLUDES the extra tile for groups which have it
+	int width;
+};
 
 struct Config
 {
@@ -59,6 +65,7 @@ struct Config
 	int numTileRows; // TODO
 	int* tileBitrates; // TODO
 	int numTileBitrates;
+	std::vector<ContextGroup> contextGroups;
 };
 
 int numTiles; // Should we pass instead? Makes sense to be global, but kind of sloppy
@@ -105,7 +112,7 @@ int getNextFrame(FILE* file, Planeset* ptr, int ySize)
 }
 
 /**
- * Cut a frame component (Y, U, or V) into thirds and stack them on top of each other.
+ * Cut a frame component (Y, U, or V) into columns and stack them on top of each other.
  */
 void rearrangeFrameComponent(unsigned char* inComponent, unsigned char* outComponent,
                              int origWidth, int origHeight,
@@ -122,7 +129,7 @@ void rearrangeFrameComponent(unsigned char* inComponent, unsigned char* outCompo
 }
 
 /**
- * Cut a frame into thirds and stack them on top of each other.
+ * Cut a frame into columns and stack them on top of each other.
  */
 void rearrangeFrame( Planeset* input, Planeset* output, int yWidth,
 					int yHeight)
@@ -253,25 +260,25 @@ void initializeContext(Bitrate bitrate, int width, int height)
 			exit(1);
 		}
 	}
-	codecContextArr[bitrate] = c;
+	codecContextArr[bitrate].push_back(c);
 }
 
 FILE* dbg_file = 0;
 
-int sendFrameToNVENC(Bitrate bitrate, unsigned char* bitstream)
+int sendFrameToNVENC(Bitrate bitrate, int contextGroupIdx, unsigned char* bitstream)
 {
 	int bsPos = 0;
 	pkt->data = NULL;
 	pkt->size = 0;
 	// Send the frame
 	int ret;
-	if ((ret = avcodec_send_frame(codecContextArr[bitrate], frame)) < 0) {
+	if ((ret = avcodec_send_frame(codecContextArr[bitrate][contextGroupIdx], frame)) < 0) {
 		printf("Error sending frame for encoding\n");
 		exit(1);
 	}
 	// Try to receive packets until there are none
 	while (ret >= 0) {
-		ret = avcodec_receive_packet(codecContextArr[bitrate], pkt);
+		ret = avcodec_receive_packet(codecContextArr[bitrate][contextGroupIdx], pkt);
 		if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
 			// Note: we always return here
 			memcpy(bitstream+bsPos, pkt->data, pkt->size);
@@ -308,9 +315,6 @@ int sendFrameToNVENC(Bitrate bitrate, unsigned char* bitstream)
 void putImageInFrame(unsigned char* y, unsigned char* u, unsigned char* v,
 					 int yWidth, int yHeight) {
 	int ret;
-	if (!frame) {
-		printf("YIKES buddy!\n");
-	}
 	ret = av_frame_make_writable(frame);
 	if (ret < 0) {
 		printf("Frame not writable\n");
@@ -334,13 +338,19 @@ void putImageInFrame(unsigned char* y, unsigned char* u, unsigned char* v,
 void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width,
 				 int height, int bitstreamSizes[4])
 {
-	if (codecContextArr[0] == NULL)
+	if (codecContextArr[0][0] == NULL)
     {
 		initializeHardware();
-		initializeContext(HIGH_BITRATE, width, height);
-		initializeContext(MEDIUM_HIGH_BITRATE, width, height);
-		initializeContext(MEDIUM_LOW_BITRATE, width, height);
-		initializeContext(LOW_BITRATE, width, height);
+		// For each context group
+		for (int i=0; i<config->contextGroups.size(); i++) {
+			initializeContext(HIGH_BITRATE, width, (config->contextGroups[i]).height);
+			initializeContext(LOW_BITRATE, width, (config->contextGroups[i]).height);
+		}
+	}
+	// ------------------- Pick up from here -------------------------
+	// For each encode group, put that image in the frame then encode it
+	for (int i=0; i<(config->contextGroups).size(); i++) {
+
 	}
 	putImageInFrame(y, u, v, width, height);
 	bitstreamSizes[HIGH_BITRATE] = sendFrameToNVENC(HIGH_BITRATE, bitstreams[HIGH_BITRATE]);
@@ -455,6 +465,7 @@ int main(int argc, char* argv[])
 	processInput(config, argc, argv);
 	int origHeight   = config->height;
 	int paddedHeight = config->height;
+	// TODO remove? since we crop first, then separate the context groups
 	while( config->numTileCols * paddedHeight > 8192 )
 	{
 		paddedHeight -= 1;
@@ -465,6 +476,40 @@ int main(int argc, char* argv[])
 		paddedHeight -= 1;
 	}
 	printf("Original height: %d Padded height: %d\n", origHeight, paddedHeight);
+
+	// Figure out how many contexts we have for each quality
+	int stackHeight = paddedHeight * config->numTileCols;
+	int afterFirst = 0;
+	int numContextGroups = 0;
+	int remainingTileCols = config->numTileCols;
+	while (stackHeight > 0) {
+		numContextGroups++;
+		int numTileColsInContextGroup = 0;
+		// If it's after the first column group, we also add the height of the first tile in the image to skip the header stuff
+		if (afterFirst == 1) {
+			while (((paddedHeight * (numTileColsInContextGroup + 1))
+					+ (paddedHeight / config->numTileRows) <= MAX_Y_HEIGHT)
+				   && (remainingTileCols > 0)) {
+				numTileColsInContextGroup++;
+				remainingTileCols--;
+			}
+		}
+		else {
+			while ((paddedHeight * (numTileColsInContextGroup + 1) <= MAX_Y_HEIGHT)
+				   && (remainingTileCols > 0)) {
+				numTileColsInContextGroup++;
+				remainingTileCols--;
+			}
+		}
+		contextGroupHeight = paddedHeight * numTileColsInContextGroup + (afterFirst == 0 ? 0 : (paddedHeight / config->numTileRows));
+		contextGroupWidth = config->width / config->numTileCols;
+		(config->contextGroups).push_back({numTileColsInContextGroup, contextGroupHeight, contextGroupWidth});
+		stackHeight -= paddedHeight * numTileColsInContextGroup;
+		if (afterFirst == 0 && stackHeight > 0) {
+			afterFirst = 1;
+		}
+	}
+	config->numContextGroups = numContextGroups;
 
 	FILE* inFile = fopen(config->inputFilename, "rb");
 	if (inFile == NULL) {
@@ -520,6 +565,7 @@ int main(int argc, char* argv[])
 	}
 
 	// Wrap up
+	// TODO: put a lot of these in a big for loop iterating over the context groups
 	sendFrameToNVENC(HIGH_BITRATE, bitstreams[HIGH_BITRATE]);
 	sendFrameToNVENC(MEDIUM_HIGH_BITRATE, bitstreams[MEDIUM_HIGH_BITRATE]);
     sendFrameToNVENC(MEDIUM_LOW_BITRATE, bitstreams[MEDIUM_LOW_BITRATE]);
