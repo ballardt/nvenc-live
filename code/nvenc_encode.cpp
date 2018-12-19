@@ -35,7 +35,7 @@ AVFrame* frame = NULL;
 AVPacket* pkt;
 enum AVHWDeviceType hwDeviceType;
 
-unsigned char* bitstreams[4];
+vector<vector<unsigned char*>> bitstreams(2); // 1st dimension is bitrate, 2nd is context group
 unsigned char* tiledBitstream;
 
 enum Bitrate
@@ -47,7 +47,7 @@ int bitrateValues[4];
 
 struct ContextGroup
 {
-	int numTiles;
+	int numTileCols;
 	int height; // INCLUDES the extra tile for groups which have it
 	int width;
 };
@@ -336,7 +336,7 @@ void putImageInFrame(unsigned char* y, unsigned char* u, unsigned char* v,
  * Encode a frame twice, once at a high bitrate and once at a low one.
  */
 void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width,
-				 int height, int bitstreamSizes[4])
+				 int height, vector<vector<int>> &bitstreamSizes)
 {
 	if (codecContextArr[0][0] == NULL)
     {
@@ -347,16 +347,38 @@ void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width
 			initializeContext(LOW_BITRATE, width, (config->contextGroups[i]).height);
 		}
 	}
-	// ------------------- Pick up from here -------------------------
 	// For each encode group, put that image in the frame then encode it
+	int currTile = 0;
+	int tileHeight = height / (config->numTileRows * config->numTileCols);
 	for (int i=0; i<(config->contextGroups).size(); i++) {
-
+		// First, get the image for this encode group
+		// TODO replace with Planeset. Probably put in a different function entirely when have time.
+		int imageSize = config->contextGroups[i].width * config->contextGroups[i].height;
+		int yOffset = 0;
+		int uvOffset = 0;
+		unsigned char* cgImageY = new unsigned char[imageSize];
+		unsigned char* cgImageU = new unsigned char[imageSize/4];
+		unsigned char* cgImageV = new unsigned char[imageSize/4];
+		// Get the first tile if this is a subsequent group
+		if (i > 0) {
+			memcpy(cgImageY, y, width*tileHeight);
+			memcpy(cgImageU, u, (width*tileHeight)/4);
+			memcpy(cgImageV, v, (width*tileHeight)/4);
+			yOffset = width*tileHeight;
+			uvOffset = (width*tileHeight)/4;
+		}
+		// Get the rest of the tiles
+		yCpySize = width * tileHeight * config->numTileRows * config->contextGroups[i].numTileCols;
+		uvCpySize = yCpySize / 4;
+		memcpy(cgImageY+yOffset, y+(currTile*width*tileHeight), yCpySize);
+		memcpy(cgImageU+uvOffset, u+(currTile*width*tileHeight/4), uvCpySize);
+		memcpy(cgImageV+uvOffset, v+(currTile*width*tileHeight/4), uvCpySize);
+		currTile += config->numTileRows * config->contextGroups[i].numTileCols;
+		// Now put it in the frame and encode it
+		putImageInFrame(cgImageY, cgImageU, cgImageV, width, config->contextGroups[i].height);
+		bitstreamSizes[HIGH_BITRATE].push_back(sendFrameToNVENC(HIGH_BITRATE, bitstreams[HIGH_BITRATE]));
+		bitstreamSizes[LOW_BITRATE].push_back(sendFrameToNVENC(LOW_BITRATE, bitstreams[LOW_BITRATE]));
 	}
-	putImageInFrame(y, u, v, width, height);
-	bitstreamSizes[HIGH_BITRATE] = sendFrameToNVENC(HIGH_BITRATE, bitstreams[HIGH_BITRATE]);
-	bitstreamSizes[MEDIUM_HIGH_BITRATE] = sendFrameToNVENC(MEDIUM_HIGH_BITRATE, bitstreams[MEDIUM_HIGH_BITRATE]);
-	bitstreamSizes[MEDIUM_LOW_BITRATE] = sendFrameToNVENC(MEDIUM_LOW_BITRATE, bitstreams[MEDIUM_LOW_BITRATE]);
-	bitstreamSizes[LOW_BITRATE] = sendFrameToNVENC(LOW_BITRATE, bitstreams[LOW_BITRATE]);
 }
 
 /**
@@ -509,7 +531,6 @@ int main(int argc, char* argv[])
 			afterFirst = 1;
 		}
 	}
-	config->numContextGroups = numContextGroups;
 
 	FILE* inFile = fopen(config->inputFilename, "rb");
 	if (inFile == NULL) {
@@ -522,38 +543,34 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 	bitrateValues[HIGH_BITRATE]        = config->highBitrate;
-	bitrateValues[MEDIUM_HIGH_BITRATE] = config->highBitrate;
-	bitrateValues[MEDIUM_LOW_BITRATE]  = config->lowBitrate;
 	bitrateValues[LOW_BITRATE]         = config->lowBitrate;
 	numTiles = config->numTileRows * config->numTileCols;
 	int ySize = config->width * config->height;
 	int uvSize = ySize / 4;
-	int bitstreamSizes[4];
+	vector<vector<int>> bitstreamSizes(2); // 1st dimension is quality, 2nd is contextGroup
 	int tiledBitstreamSize;
 
 	Planeset inputFrame( config->width, config->height );
 	Planeset outputFrame( config->width/NUM_SPLITS, paddedHeight*NUM_SPLITS );
 
-	bitstreams[HIGH_BITRATE] = (unsigned char*)malloc(sizeof(unsigned char) * BITSTREAM_SIZE);
-	bitstreams[MEDIUM_HIGH_BITRATE] = (unsigned char*)malloc(sizeof(unsigned char) * BITSTREAM_SIZE);
-	bitstreams[MEDIUM_LOW_BITRATE] = (unsigned char*)malloc(sizeof(unsigned char) * BITSTREAM_SIZE);
-	bitstreams[LOW_BITRATE] = (unsigned char*)malloc(sizeof(unsigned char) * BITSTREAM_SIZE);
+	for (int i=0; i<numContextGroups; i++) {
+		bitstreams[HIGH_BITRATE].push_back((unsigned char*)malloc(sizeof(unsigned char) * BITSTREAM_SIZE));
+		bitstreams[LOW_BITRATE].push_back((unsigned char*)malloc(sizeof(unsigned char) * BITSTREAM_SIZE));
+	}
 	tiledBitstream = (unsigned char*)malloc(sizeof(unsigned char) * BITSTREAM_SIZE);
 
 	// The main loop. Get a frame, rearrange it, send it to NVENC, stitch it, then write it out.
 	while (getNextFrame(inFile, &inputFrame, ySize))
     {
 		// config->height = paddedHeight;
-		bitstreamSizes[HIGH_BITRATE] = 0;
-		bitstreamSizes[MEDIUM_HIGH_BITRATE] = 0;
-		bitstreamSizes[MEDIUM_LOW_BITRATE] = 0;
-		bitstreamSizes[LOW_BITRATE] = 0;
+		bitstreamSizes[HIGH_BITRATE].clear();
+		bitstreamSizes[LOW_BITRATE].clear();
 
 		rearrangeFrame( &inputFrame, &outputFrame, config->width, paddedHeight );
 		encodeFrame(outputFrame.y, outputFrame.u, outputFrame.v,
-		            config->width/NUM_SPLITS, paddedHeight*NUM_SPLITS, bitstreamSizes);
+		            config->width/NUM_SPLITS, paddedHeight*NUM_SPLITS, &bitstreamSizes);
 		tiledBitstreamSize = doStitching(tiledBitstream,
-                                         4,
+                                         2,
                                          bitstreams,
                                          bitstreamSizes,
                                          config->tileBitrates,
@@ -566,21 +583,17 @@ int main(int argc, char* argv[])
 
 	// Wrap up
 	// TODO: put a lot of these in a big for loop iterating over the context groups
-	sendFrameToNVENC(HIGH_BITRATE, bitstreams[HIGH_BITRATE]);
-	sendFrameToNVENC(MEDIUM_HIGH_BITRATE, bitstreams[MEDIUM_HIGH_BITRATE]);
-    sendFrameToNVENC(MEDIUM_LOW_BITRATE, bitstreams[MEDIUM_LOW_BITRATE]);
-    sendFrameToNVENC(LOW_BITRATE, bitstreams[LOW_BITRATE]);
-	avcodec_free_context(&codecContextArr[HIGH_BITRATE]);
-	avcodec_free_context(&codecContextArr[MEDIUM_HIGH_BITRATE]);
-	avcodec_free_context(&codecContextArr[MEDIUM_LOW_BITRATE]);
-	avcodec_free_context(&codecContextArr[LOW_BITRATE]);
+	for (int i=0; i<numContextGroups; i++) {
+		sendFrameToNVENC(HIGH_BITRATE, bitstreams[HIGH_BITRATE][i]);
+		sendFrameToNVENC(LOW_BITRATE, bitstreams[LOW_BITRATE][i]);
+		avcodec_free_context(&codecContextArr[HIGH_BITRATE][i]);
+		avcodec_free_context(&codecContextArr[LOW_BITRATE][i]);
+		free(bitstreams[HIGH_BITRATE][i]);
+		free(bitstreams[LOW_BITRATE][i]);
+	}
 	av_frame_free(&frame);
 	av_packet_free(&pkt);
 	av_buffer_unref(&hwDeviceCtx);
-	free(bitstreams[HIGH_BITRATE]);
-	free(bitstreams[MEDIUM_HIGH_BITRATE]);
-	free(bitstreams[MEDIUM_LOW_BITRATE]);
-	free(bitstreams[LOW_BITRATE]);
 	free(tiledBitstream);
 	free(config);
 	fclose(inFile);
