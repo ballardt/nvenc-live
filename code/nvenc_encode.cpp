@@ -571,12 +571,13 @@ int main(int argc, char* argv[])
 		            config->width/NUM_SPLITS, paddedHeight*NUM_SPLITS, &bitstreamSizes);
 		tiledBitstreamSize = doStitching(tiledBitstream,
                                          2,
-                                         bitstreams,
+                                         &bitstreams,
                                          bitstreamSizes,
                                          config->tileBitrates,
 										 config->width, paddedHeight,
                                          config->numTileRows,
-										 config->numTileCols);
+										 config->numTileCols,
+										 config->contextGroups);
 		fwrite(tiledBitstream, sizeof(unsigned char), tiledBitstreamSize, outFile);
 		// config->height = origHeight;
 	}

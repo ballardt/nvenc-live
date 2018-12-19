@@ -462,22 +462,23 @@ void modifyPSlice(std::vector<Block>* nal, bool isFirstSlice, int ctuOffset, int
 }
 
 extern "C" int doStitching( unsigned char* tiledBitstream,
-                            int            num,
-                            unsigned char* bitstream[],
-                            int            bitstream_Size[],
+                            int            numQualityLevels,
+                            vector<vector<unsigned char*>> bitstreams,
+                            vector<vector<int>> bitstream_Size,
 						    int*           tileBitrates,
                             int            finalWidth,
                             int            finalHeight,
                             int            numTileRows,
-						    int            numTileCols)
+						    int            numTileCols,
+							vector<ContextGroup> contextGroups)
 {
 	int totalSize = 0;
 	int tbPos = 0;
-	int* bitstream_Pos[4];
-    bitstream_Pos[0] = new int( 0 );
-    bitstream_Pos[1] = new int( 0 );
-    bitstream_Pos[2] = new int( 0 );
-    bitstream_Pos[3] = new int( 0 );
+	int* bitstream_Pos[2][contextGroups.size()];
+	for (int i=0; i<contextGroups.size(); i++) {
+		bitstream_Pos[0][i] = new int( 0 );
+		bitstream_Pos[1][i] = new int( 0 );
+	}
 	std::vector<Block> nal;
 
 	// Get as many NALs as we have in the stream
@@ -503,68 +504,79 @@ extern "C" int doStitching( unsigned char* tiledBitstream,
 	int i = 0;
 	int nalType;
 	int ifs_idx = -1;
+	int posAfterFirstTile[numQualityLevels];
 	while (true)
     {
-		for (int ifs_idx=0; ifs_idx<num; ifs_idx++)
-        {
-			nalType = getNextNAL( bitstream[ifs_idx],
-                                  &nal,
-                                  bitstream_Pos[ifs_idx],
-                                  bitstream_Size[ifs_idx] );
-			// Low qual on left and right, high in middle
-			switch (nalType) {
-				case P_SLICE:
-					if (tileBitrates[i] == ifs_idx) {
-						modifyPSlice(&nal, (i==0), sliceSegAddrs[i], oldCtuOffsetBitSize,
-									 newCtuOffsetBitSize);
-						std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
-						totalSize += nal.size();
-					}
-					if (ifs_idx == num-1) i++;
-					break;
-				case I_SLICE:
-					if (tileBitrates[i] == ifs_idx) {
-						modifyISlice(&nal, (i==0), sliceSegAddrs[i], oldCtuOffsetBitSize,
-									 newCtuOffsetBitSize);
-						std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
-						totalSize += nal.size();
-					}
-					if (ifs_idx == num-1) i++;
-					break;
-				case SPS:
-					if (ifs_idx==0) {
-						modifySPS(&nal, finalWidth, finalHeight);
-						std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
-						totalSize += nal.size();
-					}
-					break;
-				case PPS:
-					if (ifs_idx==0) {
-						modifyPPS(&nal, numTileCols, numTileRows);
-						std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
-						totalSize += nal.size();
-					}
-					break;
-				case VPS:
-				case SEI:
-					if (ifs_idx==0) {
-						std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
-						totalSize += nal.size();
-					}
-					if (ifs_idx == num-1) i = 0;
-					break;
-				case OTHER:
-					break;
-				case -1:
-					goto done;
+		for (int cg_idx=0; cg_idx<contextGroups.size(); cg_idx++) {
+			for (int ifs_idx=0; ifs_idx<numQualityLevels; ifs_idx++)
+			{
+				if (cg_idx > 0) {
+					*bitstream_Pos[ifs_idx][cg_idx] = posAfterFirstTile[ifs_idx];
+				}
+				nalType = getNextNAL( bitstreams[ifs_idx][cg_idx],
+									&nal,
+									bitstream_Pos[ifs_idx][cg_idx],
+									bitstream_Size[ifs_idx][cg_idx] );
+				if (cg_idx == 0) {
+					posAfterFirstTile[ifs_idx] = bitstream_Pos[ifs_idx][cg_idx];
+				}
+				// Low qual on left and right, high in middle
+				switch (nalType) {
+					case P_SLICE:
+						if (tileBitrates[i] == ifs_idx) {
+							modifyPSlice(&nal, (i==0), sliceSegAddrs[i], oldCtuOffsetBitSize,
+										newCtuOffsetBitSize);
+							std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
+							totalSize += nal.size();
+						}
+						if (ifs_idx == numQualityLevels-1) i++;
+						break;
+					case I_SLICE:
+						if (tileBitrates[i] == ifs_idx) {
+							modifyISlice(&nal, (i==0), sliceSegAddrs[i], oldCtuOffsetBitSize,
+										newCtuOffsetBitSize);
+							std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
+							totalSize += nal.size();
+						}
+						if (ifs_idx == numQualityLevels-1) i++;
+						break;
+					case SPS:
+						if (ifs_idx==0) {
+							modifySPS(&nal, finalWidth, finalHeight);
+							std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
+							totalSize += nal.size();
+						}
+						break;
+					case PPS:
+						if (ifs_idx==0) {
+							modifyPPS(&nal, numTileCols, numTileRows);
+							std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
+							totalSize += nal.size();
+						}
+						break;
+					case VPS:
+					case SEI:
+						if (ifs_idx==0) {
+							std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
+							totalSize += nal.size();
+						}
+						if (ifs_idx == numQualityLevels-1 && cg_idx == contextGroups.size()-1) i = 0;
+						break;
+					case OTHER:
+						break;
+					case -1:
+						goto done;
+				}
+				nal.clear();
 			}
-			nal.clear();
 		}
 	}
  done:
-    for( int i=0; i<4; i++ )
+    for( int i=0; i<numQualityLevels; i++ )
     {
-        delete bitstream_Pos[i];
+		for (int j=0; j<contextGroups,size(); j++) {
+			delete bitstream_Pos[i][j];
+		}
     }
 	return totalSize;
 }
