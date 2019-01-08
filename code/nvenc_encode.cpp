@@ -376,8 +376,8 @@ void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width
 		currTile += config->numTileRows * config->contextGroups[i].numTileCols;
 		// Now put it in the frame and encode it
 		putImageInFrame(cgImageY, cgImageU, cgImageV, width, config->contextGroups[i].height);
-		bitstreamSizes[HIGH_BITRATE].push_back(sendFrameToNVENC(HIGH_BITRATE, bitstreams[HIGH_BITRATE]));
-		bitstreamSizes[LOW_BITRATE].push_back(sendFrameToNVENC(LOW_BITRATE, bitstreams[LOW_BITRATE]));
+		bitstreamSizes[HIGH_BITRATE].push_back(sendFrameToNVENC(HIGH_BITRATE, bitstreams[HIGH_BITRATE][i]));
+		bitstreamSizes[LOW_BITRATE].push_back(sendFrameToNVENC(LOW_BITRATE, bitstreams[LOW_BITRATE][i]));
 	}
 }
 
@@ -600,4 +600,3 @@ int main(int argc, char* argv[])
 	fclose(inFile);
 	fclose(outFile);
 }
-

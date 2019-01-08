@@ -505,70 +505,91 @@ extern "C" int doStitching( unsigned char* tiledBitstream,
 	int nalType;
 	int ifs_idx = -1;
 	int posAfterFirstTile[numQualityLevels];
+	int iBase;
 	while (true)
     {
-		for (int cg_idx=0; cg_idx<contextGroups.size(); cg_idx++) {
-			for (int ifs_idx=0; ifs_idx<numQualityLevels; ifs_idx++)
-			{
-				if (cg_idx > 0) {
-					*bitstream_Pos[ifs_idx][cg_idx] = posAfterFirstTile[ifs_idx];
-				}
-				nalType = getNextNAL( bitstreams[ifs_idx][cg_idx],
-									&nal,
-									bitstream_Pos[ifs_idx][cg_idx],
-									bitstream_Size[ifs_idx][cg_idx] );
-				if (cg_idx == 0) {
-					posAfterFirstTile[ifs_idx] = bitstream_Pos[ifs_idx][cg_idx];
-				}
-				// Low qual on left and right, high in middle
-				switch (nalType) {
-					case P_SLICE:
-						if (tileBitrates[i] == ifs_idx) {
-							modifyPSlice(&nal, (i==0), sliceSegAddrs[i], oldCtuOffsetBitSize,
-										newCtuOffsetBitSize);
-							std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
-							totalSize += nal.size();
-						}
-						if (ifs_idx == numQualityLevels-1) i++;
-						break;
-					case I_SLICE:
-						if (tileBitrates[i] == ifs_idx) {
-							modifyISlice(&nal, (i==0), sliceSegAddrs[i], oldCtuOffsetBitSize,
-										newCtuOffsetBitSize);
-							std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
-							totalSize += nal.size();
-						}
-						if (ifs_idx == numQualityLevels-1) i++;
-						break;
-					case SPS:
-						if (ifs_idx==0) {
-							modifySPS(&nal, finalWidth, finalHeight);
-							std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
-							totalSize += nal.size();
-						}
-						break;
-					case PPS:
-						if (ifs_idx==0) {
-							modifyPPS(&nal, numTileCols, numTileRows);
-							std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
-							totalSize += nal.size();
-						}
-						break;
-					case VPS:
-					case SEI:
-						if (ifs_idx==0) {
-							std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
-							totalSize += nal.size();
-						}
-						if (ifs_idx == numQualityLevels-1 && cg_idx == contextGroups.size()-1) i = 0;
-						break;
-					case OTHER:
-						break;
-					case -1:
-						goto done;
-				}
-				nal.clear();
+		for (int cg_idx=0; cg_idx<contextGroups.size(); cg_idx++)
+		{
+			// Not sure if we need to do this. This would make us go through all tiles in a context
+			// group at one time, but this might mess up the value of `i`. Conversely, NOT doing this
+			// will cause us to iterate all context groups at once, which does not seem right since
+			// context groups may be of different sizes.
+			if (cg_idx > 0) {
+				iBase += contextGroups[cg_idx-1].numTileCols * numTileRows;
 			}
+			do
+			{
+				for (int ifs_idx=0; ifs_idx<numQualityLevels; ifs_idx++)
+				{
+					if (cg_idx > 0 && i == -1) {
+						*bitstream_Pos[ifs_idx][cg_idx] = posAfterFirstTile[ifs_idx];
+						i == iBase;
+					}
+					nalType = getNextNAL( bitstreams[ifs_idx][cg_idx],
+										&nal,
+										bitstream_Pos[ifs_idx][cg_idx],
+										bitstream_Size[ifs_idx][cg_idx] );
+					switch (nalType) {
+						case P_SLICE:
+							if (tileBitrates[i] == ifs_idx) {
+								modifyPSlice(&nal, (i==0), sliceSegAddrs[i], oldCtuOffsetBitSize,
+											newCtuOffsetBitSize);
+								std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
+								totalSize += nal.size();
+							}
+							if (ifs_idx == numQualityLevels-1) i++;
+							break;
+						case I_SLICE:
+							if (tileBitrates[i] == ifs_idx) {
+								modifyISlice(&nal, (i==0), sliceSegAddrs[i], oldCtuOffsetBitSize,
+											newCtuOffsetBitSize);
+								std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
+								totalSize += nal.size();
+							}
+							// If this is the first tile in the first context group, save the pos
+							if (cg_idx == 0 && i == 0) {
+								posAfterFirstTile[ifs_idx] = bitstream_Pos[ifs_idx][cg_idx];
+							}
+							if (ifs_idx == numQualityLevels-1) i++;
+							break;
+						case SPS:
+							if (ifs_idx==0) {
+								modifySPS(&nal, finalWidth, finalHeight);
+								std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
+								totalSize += nal.size();
+							}
+							break;
+						case PPS:
+							if (ifs_idx==0) {
+								modifyPPS(&nal, numTileCols, numTileRows);
+								std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
+								totalSize += nal.size();
+							}
+							break;
+						case VPS:
+						case SEI:
+							if (ifs_idx==0) {
+								std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
+								totalSize += nal.size();
+							}
+							// I believe its now better to handle this in the case of -1 since there
+							// may be multiple SEI in a context group, and we only want to stop
+							// at the very last one.
+							//if (ifs_idx == numQualityLevels-1) i = 0;
+							break;
+						case OTHER:
+							break;
+						case -1:
+							if (ifs_idx == numQualityLevels-1 && cg_idx == contextGroups.size()-1) {
+								goto done;
+							}
+							else {
+								i == -1;
+							}
+					}
+					nal.clear();
+				}
+			} while (i != -1); // -1 is simply used to indicate that this context group is done
 		}
 	}
  done:
