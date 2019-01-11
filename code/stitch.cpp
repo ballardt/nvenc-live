@@ -461,16 +461,16 @@ void modifyPSlice(std::vector<Block>* nal, bool isFirstSlice, int ctuOffset, int
 	doneEditingNAL(nal, &newBits, &oldBits, oldBitsPos, false, true);
 }
 
-extern "C" int doStitching( unsigned char* tiledBitstream,
-                            int            numQualityLevels,
-                            vector<vector<unsigned char*>> bitstreams,
-                            vector<vector<int>> bitstream_Size,
-						    int*           tileBitrates,
-                            int            finalWidth,
-                            int            finalHeight,
-                            int            numTileRows,
-						    int            numTileCols,
-							vector<ContextGroup> contextGroups)
+int doStitching( unsigned char* tiledBitstream,
+                 int            numQualityLevels,
+                 vector<vector<unsigned char*> >& bitstreams,
+                 vector<vector<int> >& bitstream_Size,
+				 int*           tileBitrates,
+                 int            finalWidth,
+                 int            finalHeight,
+                 int            numTileRows,
+				 int            numTileCols,
+				 vector<ContextGroup>& contextGroups)
 {
 	int totalSize = 0;
 	int tbPos = 0;
@@ -548,7 +548,7 @@ extern "C" int doStitching( unsigned char* tiledBitstream,
 							}
 							// If this is the first tile in the first context group, save the pos
 							if (cg_idx == 0 && i == 0) {
-								posAfterFirstTile[ifs_idx] = bitstream_Pos[ifs_idx][cg_idx];
+								posAfterFirstTile[ifs_idx] = *bitstream_Pos[ifs_idx][cg_idx];
 							}
 							if (ifs_idx == numQualityLevels-1) i++;
 							break;
@@ -595,7 +595,7 @@ extern "C" int doStitching( unsigned char* tiledBitstream,
  done:
     for( int i=0; i<numQualityLevels; i++ )
     {
-		for (int j=0; j<contextGroups,size(); j++) {
+		for (int j=0; j<contextGroups.size(); j++) {
 			delete bitstream_Pos[i][j];
 		}
     }

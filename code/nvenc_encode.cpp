@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <getopt.h>
+#include <vector>
 
 #define __STDC_CONSTANT_MACROS
 
@@ -25,17 +26,19 @@ extern "C"
 #define BITSTREAM_SIZE 200000 // Increase if necessary; the program will let you know
 #define MAX_Y_HEIGHT 8192 // Hardware limitation
 
+using namespace std;
+
 static AVBufferRef* hwDeviceCtx = NULL;
 static enum AVPixelFormat hwPixFmt;
 static int hardwareInitialized = 0;
 const char* codecName;
 const AVCodec* codec;
-vector<vector<AVCodecContext*>> codecContextArr(2); // 1st dimension is bitrate, 2nd is context group
+vector<vector<AVCodecContext*> > codecContextArr(2); // 1st dimension is bitrate, 2nd is context group
 AVFrame* frame = NULL;
 AVPacket* pkt;
 enum AVHWDeviceType hwDeviceType;
 
-vector<vector<unsigned char*>> bitstreams(2); // 1st dimension is bitrate, 2nd is context group
+vector<vector<unsigned char*> > bitstreams(2); // 1st dimension is bitrate, 2nd is context group
 unsigned char* tiledBitstream;
 
 enum Bitrate
@@ -44,13 +47,6 @@ enum Bitrate
 	LOW_BITRATE
 };
 int bitrateValues[4];
-
-struct ContextGroup
-{
-	int numTileCols;
-	int height; // INCLUDES the extra tile for groups which have it
-	int width;
-};
 
 struct Config
 {
@@ -336,7 +332,7 @@ void putImageInFrame(unsigned char* y, unsigned char* u, unsigned char* v,
  * Encode a frame twice, once at a high bitrate and once at a low one.
  */
 void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width,
-				 int height, vector<vector<int>> &bitstreamSizes)
+				 int height, vector<vector<int> > &bitstreamSizes)
 {
 	if (codecContextArr[0][0] == NULL)
     {
@@ -368,16 +364,20 @@ void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width
 			uvOffset = (width*tileHeight)/4;
 		}
 		// Get the rest of the tiles
-		yCpySize = width * tileHeight * config->numTileRows * config->contextGroups[i].numTileCols;
-		uvCpySize = yCpySize / 4;
+		int yCpySize = width * tileHeight * config->numTileRows * config->contextGroups[i].numTileCols;
+		int uvCpySize = yCpySize / 4;
 		memcpy(cgImageY+yOffset, y+(currTile*width*tileHeight), yCpySize);
 		memcpy(cgImageU+uvOffset, u+(currTile*width*tileHeight/4), uvCpySize);
 		memcpy(cgImageV+uvOffset, v+(currTile*width*tileHeight/4), uvCpySize);
 		currTile += config->numTileRows * config->contextGroups[i].numTileCols;
 		// Now put it in the frame and encode it
 		putImageInFrame(cgImageY, cgImageU, cgImageV, width, config->contextGroups[i].height);
-		bitstreamSizes[HIGH_BITRATE].push_back(sendFrameToNVENC(HIGH_BITRATE, bitstreams[HIGH_BITRATE][i]));
-		bitstreamSizes[LOW_BITRATE].push_back(sendFrameToNVENC(LOW_BITRATE, bitstreams[LOW_BITRATE][i]));
+		bitstreamSizes[HIGH_BITRATE].push_back(sendFrameToNVENC(HIGH_BITRATE,
+                                                                i,
+                                                                bitstreams[HIGH_BITRATE][i]));
+		bitstreamSizes[LOW_BITRATE].push_back(sendFrameToNVENC(LOW_BITRATE,
+                                                               i,
+                                                               bitstreams[LOW_BITRATE][i]));
 	}
 }
 
@@ -523,8 +523,8 @@ int main(int argc, char* argv[])
 				remainingTileCols--;
 			}
 		}
-		contextGroupHeight = paddedHeight * numTileColsInContextGroup + (afterFirst == 0 ? 0 : (paddedHeight / config->numTileRows));
-		contextGroupWidth = config->width / config->numTileCols;
+		int contextGroupHeight = paddedHeight * numTileColsInContextGroup + (afterFirst == 0 ? 0 : (paddedHeight / config->numTileRows));
+		int contextGroupWidth = config->width / config->numTileCols;
 		(config->contextGroups).push_back({numTileColsInContextGroup, contextGroupHeight, contextGroupWidth});
 		stackHeight -= paddedHeight * numTileColsInContextGroup;
 		if (afterFirst == 0 && stackHeight > 0) {
@@ -547,7 +547,7 @@ int main(int argc, char* argv[])
 	numTiles = config->numTileRows * config->numTileCols;
 	int ySize = config->width * config->height;
 	int uvSize = ySize / 4;
-	vector<vector<int>> bitstreamSizes(2); // 1st dimension is quality, 2nd is contextGroup
+	vector<vector<int> > bitstreamSizes(2); // 1st dimension is quality, 2nd is contextGroup
 	int tiledBitstreamSize;
 
 	Planeset inputFrame( config->width, config->height );
@@ -568,13 +568,14 @@ int main(int argc, char* argv[])
 
 		rearrangeFrame( &inputFrame, &outputFrame, config->width, paddedHeight );
 		encodeFrame(outputFrame.y, outputFrame.u, outputFrame.v,
-		            config->width/NUM_SPLITS, paddedHeight*NUM_SPLITS, &bitstreamSizes);
+		            config->width/NUM_SPLITS, paddedHeight*NUM_SPLITS, bitstreamSizes);
 		tiledBitstreamSize = doStitching(tiledBitstream,
                                          2,
-                                         &bitstreams,
+                                         bitstreams,
                                          bitstreamSizes,
                                          config->tileBitrates,
-										 config->width, paddedHeight,
+										 config->width,
+                                         paddedHeight,
                                          config->numTileRows,
 										 config->numTileCols,
 										 config->contextGroups);
@@ -585,8 +586,8 @@ int main(int argc, char* argv[])
 	// Wrap up
 	// TODO: put a lot of these in a big for loop iterating over the context groups
 	for (int i=0; i<numContextGroups; i++) {
-		sendFrameToNVENC(HIGH_BITRATE, bitstreams[HIGH_BITRATE][i]);
-		sendFrameToNVENC(LOW_BITRATE, bitstreams[LOW_BITRATE][i]);
+		sendFrameToNVENC(HIGH_BITRATE, i, bitstreams[HIGH_BITRATE][i]);
+		sendFrameToNVENC(LOW_BITRATE, i, bitstreams[LOW_BITRATE][i]);
 		avcodec_free_context(&codecContextArr[HIGH_BITRATE][i]);
 		avcodec_free_context(&codecContextArr[LOW_BITRATE][i]);
 		free(bitstreams[HIGH_BITRATE][i]);
