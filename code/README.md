@@ -1,12 +1,3 @@
-# Notes for Carsten
-
-* Commit `0d13188`, "Pass the number of slices...": Prior to this, `713cbd4`, "Switch to 6 slices" must be the FFmpeg version. After rolling back, simply re-install via the commands below. Only FFmpeg must be re-installed, not the prerequisites (like CUDA SDK). To use a different number of horizontal slices than 6, change `sliceModeData` to a different value (check the commit to see exactly where in nvenc.c to change).
-
-* Commit `0fd9d34`, "Tile rows and cols now...": This and some of the preceding commits add CLI functionality, but are slight misnomers because it is still assumed that the video has 6 or fewer tiles. For example, the tile bitrates are still hardcoded. The CLI as it currently is isn't finished until commit `0d402d86`, "Don't process NAL data...".
-
-* Commit `5382610`, "Stiching works": Prior to this, the pipeline is not functional.
-
-
 # Introduction
 
 RATS was built using Ubuntu 17 and a GTX 1080 Ti. Any recent Ubuntu distro and a GPU with NVENCODE should work, but may require changes to the installation process. The goal of RATS is to encode a raw video file (YUV420p) into an HEVC bitstream in real-time in such a way that different parts of the video are encoded at different bitrates. This is accomplished by rearranging the pixels in the source then encoding each frame twice--once at a high bitrate, and once at a low one. Finally, the resulting bitstreams are stitched together into a single image containing some high-bitrate parts and some low-bitrate parts, and the pieces that aren’t used in the final image are simply discarded.
@@ -131,9 +122,28 @@ Next, install FFmpeg:
     hash -r 
     sudo ldconfig 
 
-Next, edit /etc/ld.so.conf and append “/home/<your username>/ffmpeg\_build/lib” to the bottom of it. Finally, run 
+> You may experience an issue during configuration regarding a missing ffnvenc. If so, run the commands below
+>
+> ```
+> git clone https://git.videolan.org/git/ffmpeg/nv-codec-headers.git
+> cd nv-codec-headers
+> make
+> sudo make install
+> ```
+
+Next, edit /etc/ld.so.conf and append “/home/<your username>/ffmpeg\_build/lib” to the bottom of it. Now run 
 
     sudo ldconfig 
+
+Finally, install nvidia-patch to remove the limits imposed by NVIDIA on consumer-grade GPUs. Follow the instructions at [https://github.com/keylase/nvidia-patch](https://github.com/keylase/nvidia-patch) to ensure your NVIDIA driver version is supported. The instructions are nearly the same for all versions, substituting only the version number. For example, if you are using version 396.54:
+
+    mkdir /opt/nvidia && cd /opt/nvidia
+    wget https://download.nvidia.com/XFree86/Linux-x86_64/396.54/NVIDIA-Linux-x86_64-396.54.run
+    chmod +x ./NVIDIA-Linux-x86_64-396.54.run
+    ./NVIDIA-Linux-x86_64-396.54.run
+	git clone https://github.com/keylase/nvidia-patch
+	cd nvidia-patch
+	./patch.sh
 
 You should now be ready to build RATS.
 
@@ -188,7 +198,8 @@ To trim a video to a certain length, specify the start time with `-ss` and durat
 
 To convert to YUV, follow the below. Note that the `-r` option is the FPS, `-s:v` is the resolution, and `-vcodec` need not be `hevc_nvenc`, though it may take longer otherwise. Also, do not leave the curly braces; if you don't want to specify, e.g., a preset, just remove that whole thing:
 
-    ffmpeg -f rawvideo -s:v 3840x2048 -r 30 -pix_fmt yuv420p -i input_vid.yuv -vcodec hevc_nvenc {OPTIONS, e.g. -preset slow, GO HERE} output_vid.hevc
+    ffmpeg -i input_vid.mp4 -c:v rawvideo -pix_fmt yuv420p output_vid.yuv
+
 
 # System Overview
 
