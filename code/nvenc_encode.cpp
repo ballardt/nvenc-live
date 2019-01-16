@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <iostream>
 #include <getopt.h>
 #include <vector>
 
@@ -334,10 +335,12 @@ void putImageInFrame(unsigned char* y, unsigned char* u, unsigned char* v,
 void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width,
 				 int height, vector<vector<int> > &bitstreamSizes)
 {
-	if (codecContextArr[0][0] == NULL)
+    if( codecContextArr[0].empty() )
+	// if(codecContextArr[0][0] == NULL)
     {
 		initializeHardware();
 		// For each context group
+        std::cerr << __LINE__ << " context group size: " << config->contextGroups.size() << std::endl;
 		for (int i=0; i<config->contextGroups.size(); i++) {
 			initializeContext(HIGH_BITRATE, width, (config->contextGroups[i]).height);
 			initializeContext(LOW_BITRATE, width, (config->contextGroups[i]).height);
@@ -488,10 +491,12 @@ int main(int argc, char* argv[])
 	int origHeight   = config->height;
 	int paddedHeight = config->height;
 	// TODO remove? since we crop first, then separate the context groups
+#if 0
 	while( config->numTileCols * paddedHeight > 8192 )
 	{
 		paddedHeight -= 1;
 	}
+#endif
 	printf("Original height: %d Padded height: %d\n", origHeight, paddedHeight);
 	while( paddedHeight % ( config->numTileRows * 32 ) != 0 )
 	{
@@ -601,3 +606,4 @@ int main(int argc, char* argv[])
 	fclose(inFile);
 	fclose(outFile);
 }
+

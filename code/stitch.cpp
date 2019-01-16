@@ -2,6 +2,7 @@
 #include <sstream>
 #include <iterator>
 #include <iostream>
+#include <iomanip>
 #include <cstring>
 #include <vector>
 #include <map>
@@ -30,16 +31,17 @@ std::map<int, Bitset> ctuOffsetBits;
  * The type is dictated by the first 6 bits after the (3-byte + 1-bit) border.
  * Keep it simple with bitmasks, no need to use Bitsets.
  */
-NALType getNALType(std::vector<Block>* nal) {
+NALType getNALType(std::vector<Block>& nal) {
 	NALType nalType;
 	int typeBitsOffset = 3;
 	// Move past any extra 0x00's. This is mostly for VPS.
+    std::cerr << __LINE__ << " nal size " << nal.size() << std::endl;
 	int i = 0;
-	while ((*nal)[i+2] != 0x01) {
+	while (nal[i+2] != 0x01) {
 		typeBitsOffset++;
 		i++;
 	}
-	unsigned char typeBits = (*nal)[typeBitsOffset] >> 1;
+	unsigned char typeBits = nal[typeBitsOffset] >> 1;
 	switch (typeBits) {
 		case 0x00:
 		case 0x01:
@@ -78,6 +80,18 @@ NALType getNALType(std::vector<Block>* nal) {
  */
 int getNextNAL(unsigned char* bytes, std::vector<Block>* buf, int* bytesPos, int bytesSize)
 {
+#if 0
+    std::cerr << "Enter getNextNAL with " << *bytesPos << std::endl;
+    unsigned char* p = bytes;
+    for( int i=0; i<10; i++ )
+    {
+        for( int j=0; j<10; j++ )
+        {
+            std::cerr << std::setw(4) << int(p[i*10+j]) << " ";
+        }
+        std::cerr << std::endl;
+    }
+#endif
 	if (*bytesPos >= bytesSize) {
 		return -1;
 	}
@@ -111,7 +125,7 @@ int getNextNAL(unsigned char* bytes, std::vector<Block>* buf, int* bytesPos, int
 		buf->pop_back();
 		buf->pop_back();
 	}
-	return getNALType(buf);
+	return getNALType(*buf);
 }
 
 /**
@@ -523,7 +537,7 @@ int doStitching( unsigned char* tiledBitstream,
 				{
 					if (cg_idx > 0 && i == -1) {
 						*bitstream_Pos[ifs_idx][cg_idx] = posAfterFirstTile[ifs_idx];
-						i == iBase;
+						i = iBase;
 					}
 					nalType = getNextNAL( bitstreams[ifs_idx][cg_idx],
 										&nal,
@@ -584,7 +598,7 @@ int doStitching( unsigned char* tiledBitstream,
 								goto done;
 							}
 							else {
-								i == -1;
+								i = -1;
 							}
 					}
 					nal.clear();
