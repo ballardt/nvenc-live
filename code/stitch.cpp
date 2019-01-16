@@ -519,7 +519,7 @@ int doStitching( unsigned char* tiledBitstream,
 	int nalType;
 	int ifs_idx = -1;
 	int posAfterFirstTile[numQualityLevels];
-	int iBase;
+	int iBase = 0;
 	while (true)
     {
 		for (int cg_idx=0; cg_idx<contextGroups.size(); cg_idx++)
@@ -597,9 +597,10 @@ int doStitching( unsigned char* tiledBitstream,
 							if (ifs_idx == numQualityLevels-1 && cg_idx == contextGroups.size()-1) {
 								goto done;
 							}
-							else {
+                            else if( ifs_idx == numQualityLevels-1 )
+                            {
 								i = -1;
-							}
+                            }
 					}
 					nal.clear();
 				}
