@@ -333,7 +333,7 @@ void putImageInFrame(unsigned char* y, unsigned char* u, unsigned char* v,
  * Encode a frame twice, once at a high bitrate and once at a low one.
  */
 void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width,
-				 int height, vector<vector<int> > &bitstreamSizes)
+				 int height, vector<vector<long> > &bitstreamSizes)
 {
     if( codecContextArr[0].empty() )
 	// if(codecContextArr[0][0] == NULL)
@@ -552,7 +552,7 @@ int main(int argc, char* argv[])
 	numTiles = config->numTileRows * config->numTileCols;
 	int ySize = config->width * config->height;
 	int uvSize = ySize / 4;
-	vector<vector<int> > bitstreamSizes(2); // 1st dimension is quality, 2nd is contextGroup
+	vector<vector<long> > bitstreamSizes(2); // 1st dimension is quality, 2nd is contextGroup
 	int tiledBitstreamSize;
 
 	Planeset inputFrame( config->width, config->height );

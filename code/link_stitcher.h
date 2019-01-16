@@ -15,7 +15,7 @@ struct ContextGroup
 int doStitching( unsigned char* tiledBitstream,
                  int            numQualityLevels,
                  vector<vector<unsigned char*> >& bitstreams,
-                 vector<vector<int> >& bitstream_Size,
+                 vector<vector<long> >& bitstream_Size,
                  int*           tileBitrates,
                  int            finalWidth,
                  int            finalHeight,

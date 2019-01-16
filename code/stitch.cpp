@@ -35,7 +35,7 @@ NALType getNALType(std::vector<Block>& nal) {
 	NALType nalType;
 	int typeBitsOffset = 3;
 	// Move past any extra 0x00's. This is mostly for VPS.
-    std::cerr << __LINE__ << " nal size " << nal.size() << std::endl;
+    // std::cerr << __LINE__ << " nal size " << nal.size() << std::endl;
 	int i = 0;
 	while (nal[i+2] != 0x01) {
 		typeBitsOffset++;
@@ -78,7 +78,7 @@ NALType getNALType(std::vector<Block>& nal) {
  *
  * Returns the NAL type, or -1 if there are no more NALs in the stream.
  */
-int getNextNAL(unsigned char* bytes, std::vector<Block>* buf, int* bytesPos, int bytesSize)
+int getNextNAL(unsigned char* bytes, std::vector<Block>* buf, long* bytesPos, long bytesSize)
 {
 #if 0
     std::cerr << "Enter getNextNAL with " << *bytesPos << std::endl;
@@ -478,7 +478,7 @@ void modifyPSlice(std::vector<Block>* nal, bool isFirstSlice, int ctuOffset, int
 int doStitching( unsigned char* tiledBitstream,
                  int            numQualityLevels,
                  vector<vector<unsigned char*> >& bitstreams,
-                 vector<vector<int> >& bitstream_Size,
+                 vector<vector<long> >& bitstream_Size,
 				 int*           tileBitrates,
                  int            finalWidth,
                  int            finalHeight,
@@ -488,10 +488,11 @@ int doStitching( unsigned char* tiledBitstream,
 {
 	int totalSize = 0;
 	int tbPos = 0;
-	int* bitstream_Pos[2][contextGroups.size()];
+	long bitstream_Pos[numQualityLevels][contextGroups.size()];
 	for (int i=0; i<contextGroups.size(); i++) {
-		bitstream_Pos[0][i] = new int( 0 );
-		bitstream_Pos[1][i] = new int( 0 );
+	    for (int j=0; j<numQualityLevels; j++) {
+		    bitstream_Pos[j][i] = 0;
+        }
 	}
 	std::vector<Block> nal;
 
@@ -505,7 +506,7 @@ int doStitching( unsigned char* tiledBitstream,
 	int tileCtuHeight = (finalHeight / ctuSize) / numTileRows;
 	int tileCtuWidth = imgCtuWidth / numTileCols;
 	int tileIdx;
-	int sliceSegAddrs[numTiles]; // 0 not used, but convenient for index
+	vector<int> sliceSegAddrs(numTiles); // 0 not used, but convenient for index
 	for (int col=0; col<numTileCols; col++) {
 		for (int row=0; row<numTileRows; row++) {
 			tileIdx = (numTileRows * col) + row;
@@ -515,11 +516,16 @@ int doStitching( unsigned char* tiledBitstream,
 	for (int i=0; i<numTiles; i++) {
 		ctuOffsetBits.insert({sliceSegAddrs[i], Bitset(newCtuOffsetBitSize, sliceSegAddrs[i])});
 	}
-	int i = 0;
-	int nalType;
-	int ifs_idx = -1;
-	int posAfterFirstTile[numQualityLevels];
-	int iBase = 0;
+	int  i = 0;
+	int  nalType;
+	int  ifs_idx = -1;
+
+	long posAfterFirstTile[numQualityLevels];
+	for (int j=0; j<numQualityLevels; j++) {
+        posAfterFirstTile[j] = -1;
+    }
+
+	int  iBase = 0;
 	while (true)
     {
 		for (int cg_idx=0; cg_idx<contextGroups.size(); cg_idx++)
@@ -533,27 +539,56 @@ int doStitching( unsigned char* tiledBitstream,
 			}
 			do
 			{
+                if( i >= (int)sliceSegAddrs.size() )
+                {
+                    std::cerr << "line " << __LINE__ << " index i (" << i << ") is >= than number of tiles (" << numTiles << ")" << std::endl;
+                }
+
 				for (int ifs_idx=0; ifs_idx<numQualityLevels; ifs_idx++)
 				{
 					if (cg_idx > 0 && i == -1) {
-						*bitstream_Pos[ifs_idx][cg_idx] = posAfterFirstTile[ifs_idx];
+						bitstream_Pos[ifs_idx][cg_idx] = posAfterFirstTile[ifs_idx];
 						i = iBase;
 					}
 					nalType = getNextNAL( bitstreams[ifs_idx][cg_idx],
 										&nal,
-										bitstream_Pos[ifs_idx][cg_idx],
+										&bitstream_Pos[ifs_idx][cg_idx],
 										bitstream_Size[ifs_idx][cg_idx] );
 					switch (nalType) {
 						case P_SLICE:
+                            std::cerr << "line " << __LINE__ << " case P_SLICE, i is " << i << std::endl;
+                            if( i >= (int)sliceSegAddrs.size() )
+                            {
+                                std::cerr << "line " << __LINE__ << " index i (" << i << ") is >= than number of tiles (" << numTiles << ")" << std::endl;
+                                exit( -1 );
+                            }
+
 							if (tileBitrates[i] == ifs_idx) {
 								modifyPSlice(&nal, (i==0), sliceSegAddrs[i], oldCtuOffsetBitSize,
 											newCtuOffsetBitSize);
 								std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
 								totalSize += nal.size();
 							}
-							if (ifs_idx == numQualityLevels-1) i++;
+							if (cg_idx == 0 && i == 0) {
+								posAfterFirstTile[ifs_idx] = bitstream_Pos[ifs_idx][cg_idx];
+							}
+							if (ifs_idx == numQualityLevels-1)
+                            {
+                                i++;
+                                std::cerr << "line " << __LINE__ << " index i is " << i << std::endl;
+                            }
 							break;
 						case I_SLICE:
+                            std::cerr << "line " << __LINE__ << " case I_SLICE, i is " << i
+                                      << " ifs_idx=" << ifs_idx
+                                      << " cg_idx=" << cg_idx
+                                      << std::endl;
+                            if( i >= (int)sliceSegAddrs.size() )
+                            {
+                                std::cerr << "line " << __LINE__ << " index i (" << i << ") is >= than number of tiles (" << numTiles << ")" << std::endl;
+                                exit( -1 );
+                            }
+
 							if (tileBitrates[i] == ifs_idx) {
 								modifyISlice(&nal, (i==0), sliceSegAddrs[i], oldCtuOffsetBitSize,
 											newCtuOffsetBitSize);
@@ -562,9 +597,13 @@ int doStitching( unsigned char* tiledBitstream,
 							}
 							// If this is the first tile in the first context group, save the pos
 							if (cg_idx == 0 && i == 0) {
-								posAfterFirstTile[ifs_idx] = *bitstream_Pos[ifs_idx][cg_idx];
+								posAfterFirstTile[ifs_idx] = bitstream_Pos[ifs_idx][cg_idx];
 							}
-							if (ifs_idx == numQualityLevels-1) i++;
+							if (ifs_idx == numQualityLevels-1)
+                            {
+                                i++;
+                                std::cerr << "line " << __LINE__ << " index i is " << i << std::endl;
+                            }
 							break;
 						case SPS:
 							if (ifs_idx==0) {
@@ -581,7 +620,18 @@ int doStitching( unsigned char* tiledBitstream,
 							}
 							break;
 						case VPS:
+                            std::cerr << "line " << __LINE__ << " case VPS, i is " << i << std::endl;
+							if (ifs_idx==0) {
+								std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
+								totalSize += nal.size();
+							}
+							// I believe its now better to handle this in the case of -1 since there
+							// may be multiple SEI in a context group, and we only want to stop
+							// at the very last one.
+							//if (ifs_idx == numQualityLevels-1) i = 0;
+							break;
 						case SEI:
+                            std::cerr << "line " << __LINE__ << " case SEI, i is " << i << std::endl;
 							if (ifs_idx==0) {
 								std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
 								totalSize += nal.size();
@@ -592,8 +642,10 @@ int doStitching( unsigned char* tiledBitstream,
 							//if (ifs_idx == numQualityLevels-1) i = 0;
 							break;
 						case OTHER:
+                            std::cerr << "line " << __LINE__ << " case OTHER, i is " << i << std::endl;
 							break;
 						case -1:
+                            std::cerr << "line " << __LINE__ << " case -1, i is " << i << std::endl;
 							if (ifs_idx == numQualityLevels-1 && cg_idx == contextGroups.size()-1) {
 								goto done;
 							}
@@ -608,11 +660,5 @@ int doStitching( unsigned char* tiledBitstream,
 		}
 	}
  done:
-    for( int i=0; i<numQualityLevels; i++ )
-    {
-		for (int j=0; j<contextGroups.size(); j++) {
-			delete bitstream_Pos[i][j];
-		}
-    }
 	return totalSize;
 }
