@@ -12,11 +12,14 @@ encode: encode.o config.o stitch.o
 
 stitch.o: stitch.cpp
 	gcc -g -static \
+		-std=c++11 \
 		-I/home/griff/Install/boost/include \
 		-c -o stitch.o stitch.cpp 
 
 encode.o: nvenc_encode.cpp
 	g++ -g -static -c -o encode.o nvenc_encode.cpp \
+		-Wno-deprecated-declarations \
+		-std=c++11 \
 		-I/home/griff/Install/boost/include \
 		-I/home/griff/Install/ffmpeg-nvenc/include \
 		-fvisibility=hidden
@@ -27,5 +30,5 @@ config.o: nvenc_config.cpp
 		-fvisibility=hidden
 
 clean:
-	rm -f encode encode.o stitch.o
+	rm -f encode *.o
 
