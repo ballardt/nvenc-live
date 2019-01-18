@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <iostream>
-#include <getopt.h>
 #include <vector>
 
 #define __STDC_CONSTANT_MACROS
@@ -23,6 +22,7 @@ extern "C"
 
 #include "link_stitcher.h"
 #include "nvenc_config.h"
+#include "nvenc_planeset.h"
 
 #define NUM_SPLITS (config.numTileCols)
 #define BITSTREAM_SIZE 200000 // Increase if necessary; the program will let you know
@@ -53,28 +53,6 @@ int bitrateValues[4];
 int numTiles; // Should we pass instead? Makes sense to be global, but kind of sloppy
 
 Config config;
-
-struct Planeset
-{
-public:
-    Planeset( int w, int h )
-    {
-        y = new unsigned char[w*h];
-        u = new unsigned char[w*h/4];
-        v = new unsigned char[w*h/4];
-    }
-
-    ~Planeset()
-    {
-        delete [] y;
-        delete [] u;
-        delete [] v;
-    }
-
-	unsigned char* y;
-	unsigned char* u;
-	unsigned char* v;
-};
 
 /**
  * Get the next frame, consisting of a Y, U, and V component.
