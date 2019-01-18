@@ -520,11 +520,6 @@ int doStitching( unsigned char* tiledBitstream,
 	int  nalType;
 	int  ifs_idx = -1;
 
-	long posAfterFirstTile[numQualityLevels];
-	for (int j=0; j<numQualityLevels; j++) {
-        posAfterFirstTile[j] = -1;
-    }
-
 	int  iBase = 0;
 	while (true)
     {
@@ -547,7 +542,6 @@ int doStitching( unsigned char* tiledBitstream,
 				for (int ifs_idx=0; ifs_idx<numQualityLevels; ifs_idx++)
 				{
 					if (cg_idx > 0 && i == -1) {
-						bitstream_Pos[ifs_idx][cg_idx] = posAfterFirstTile[ifs_idx];
 						i = iBase;
 					}
 					nalType = getNextNAL( bitstreams[ifs_idx][cg_idx],
@@ -568,9 +562,6 @@ int doStitching( unsigned char* tiledBitstream,
 											newCtuOffsetBitSize);
 								std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
 								totalSize += nal.size();
-							}
-							if (cg_idx == 0 && i == 0) {
-								posAfterFirstTile[ifs_idx] = bitstream_Pos[ifs_idx][cg_idx];
 							}
 							if (ifs_idx == numQualityLevels-1)
                             {
@@ -596,9 +587,6 @@ int doStitching( unsigned char* tiledBitstream,
 								totalSize += nal.size();
 							}
 							// If this is the first tile in the first context group, save the pos
-							if (cg_idx == 0 && i == 0) {
-								posAfterFirstTile[ifs_idx] = bitstream_Pos[ifs_idx][cg_idx];
-							}
 							if (ifs_idx == numQualityLevels-1)
                             {
                                 i++;

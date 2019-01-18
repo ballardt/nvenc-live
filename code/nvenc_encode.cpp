@@ -358,14 +358,6 @@ void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width
 		unsigned char* cgImageY = new unsigned char[imageSize];
 		unsigned char* cgImageU = new unsigned char[imageSize/4];
 		unsigned char* cgImageV = new unsigned char[imageSize/4];
-		// Get the first tile if this is a subsequent group
-		if (i > 0) {
-			memcpy(cgImageY, y, width*tileHeight);
-			memcpy(cgImageU, u, (width*tileHeight)/4);
-			memcpy(cgImageV, v, (width*tileHeight)/4);
-			yOffset = width*tileHeight;
-			uvOffset = (width*tileHeight)/4;
-		}
 		// Get the rest of the tiles
 		int yCpySize = width * tileHeight * config->numTileRows * config->contextGroups[i].numTileCols;
 		int uvCpySize = yCpySize / 4;
@@ -506,35 +498,20 @@ int main(int argc, char* argv[])
 
 	// Figure out how many contexts we have for each quality
 	int stackHeight = paddedHeight * config->numTileCols;
-	int afterFirst = 0;
 	int numContextGroups = 0;
 	int remainingTileCols = config->numTileCols;
 	while (stackHeight > 0) {
 		numContextGroups++;
 		int numTileColsInContextGroup = 0;
-		// If it's after the first column group, we also add the height of the first tile in the image to skip the header stuff
-		if (afterFirst == 1) {
-			while (((paddedHeight * (numTileColsInContextGroup + 1))
-					+ (paddedHeight / config->numTileRows) <= MAX_Y_HEIGHT)
-				   && (remainingTileCols > 0)) {
-				numTileColsInContextGroup++;
-				remainingTileCols--;
-			}
+		while ((paddedHeight * (numTileColsInContextGroup + 1) <= MAX_Y_HEIGHT)
+				&& (remainingTileCols > 0)) {
+			numTileColsInContextGroup++;
+			remainingTileCols--;
 		}
-		else {
-			while ((paddedHeight * (numTileColsInContextGroup + 1) <= MAX_Y_HEIGHT)
-				   && (remainingTileCols > 0)) {
-				numTileColsInContextGroup++;
-				remainingTileCols--;
-			}
-		}
-		int contextGroupHeight = paddedHeight * numTileColsInContextGroup + (afterFirst == 0 ? 0 : (paddedHeight / config->numTileRows));
+		int contextGroupHeight = paddedHeight * numTileColsInContextGroup;
 		int contextGroupWidth = config->width / config->numTileCols;
 		(config->contextGroups).push_back({numTileColsInContextGroup, contextGroupHeight, contextGroupWidth});
 		stackHeight -= paddedHeight * numTileColsInContextGroup;
-		if (afterFirst == 0 && stackHeight > 0) {
-			afterFirst = 1;
-		}
 	}
 
 	FILE* inFile = fopen(config->inputFilename, "rb");
