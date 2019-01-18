@@ -22,8 +22,9 @@ extern "C"
 };
 
 #include "link_stitcher.h"
+#include "nvenc_config.h"
 
-#define NUM_SPLITS (config->numTileCols)
+#define NUM_SPLITS (config.numTileCols)
 #define BITSTREAM_SIZE 200000 // Increase if necessary; the program will let you know
 #define MAX_Y_HEIGHT 8192 // Hardware limitation
 
@@ -49,25 +50,9 @@ enum Bitrate
 };
 int bitrateValues[4];
 
-struct Config
-{
-	char* inputFilename;
-	char* outputFilename;
-	int width;
-	int height;
-	double fps; // TODO
-	int highBitrate;
-	int lowBitrate;
-	int numTileCols; // TODO
-	int numTileRows; // TODO
-	int* tileBitrates; // TODO
-	int numTileBitrates;
-	std::vector<ContextGroup> contextGroups;
-};
-
 int numTiles; // Should we pass instead? Makes sense to be global, but kind of sloppy
 
-Config* config = 0;
+Config config;
 
 struct Planeset
 {
@@ -340,19 +325,19 @@ void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width
     {
 		initializeHardware();
 		// For each context group
-        std::cerr << __LINE__ << " context group size: " << config->contextGroups.size() << std::endl;
-		for (int i=0; i<config->contextGroups.size(); i++) {
-			initializeContext(HIGH_BITRATE, width, (config->contextGroups[i]).height);
-			initializeContext(LOW_BITRATE, width, (config->contextGroups[i]).height);
+        std::cerr << __LINE__ << " context group size: " << config.contextGroups.size() << std::endl;
+		for (int i=0; i<config.contextGroups.size(); i++) {
+			initializeContext(HIGH_BITRATE, width, (config.contextGroups[i]).height);
+			initializeContext(LOW_BITRATE, width, (config.contextGroups[i]).height);
 		}
 	}
 	// For each encode group, put that image in the frame then encode it
 	int currTile = 0;
-	int tileHeight = height / (config->numTileRows * config->numTileCols);
-	for (int i=0; i<(config->contextGroups).size(); i++) {
+	int tileHeight = height / (config.numTileRows * config.numTileCols);
+	for (int i=0; i<(config.contextGroups).size(); i++) {
 		// First, get the image for this encode group
 		// TODO replace with Planeset. Probably put in a different function entirely when have time.
-		int imageSize = config->contextGroups[i].width * config->contextGroups[i].height;
+		int imageSize = config.contextGroups[i].width * config.contextGroups[i].height;
 		int yOffset = 0;
 		int uvOffset = 0;
 		unsigned char* cgImageY = new unsigned char[imageSize];
@@ -367,14 +352,14 @@ void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width
 			uvOffset = (width*tileHeight)/4;
 		}
 		// Get the rest of the tiles
-		int yCpySize = width * tileHeight * config->numTileRows * config->contextGroups[i].numTileCols;
+		int yCpySize = width * tileHeight * config.numTileRows * config.contextGroups[i].numTileCols;
 		int uvCpySize = yCpySize / 4;
 		memcpy(cgImageY+yOffset, y+(currTile*width*tileHeight), yCpySize);
 		memcpy(cgImageU+uvOffset, u+(currTile*width*tileHeight/4), uvCpySize);
 		memcpy(cgImageV+uvOffset, v+(currTile*width*tileHeight/4), uvCpySize);
-		currTile += config->numTileRows * config->contextGroups[i].numTileCols;
+		currTile += config.numTileRows * config.contextGroups[i].numTileCols;
 		// Now put it in the frame and encode it
-		putImageInFrame(cgImageY, cgImageU, cgImageV, width, config->contextGroups[i].height);
+		putImageInFrame(cgImageY, cgImageU, cgImageV, width, config.contextGroups[i].height);
 		bitstreamSizes[HIGH_BITRATE].push_back(sendFrameToNVENC(HIGH_BITRATE,
                                                                 i,
                                                                 bitstreams[HIGH_BITRATE][i]));
@@ -384,138 +369,38 @@ void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width
 	}
 }
 
-/**
- * Process tile bitrates
- * Implementation is sloppy, should be changed to be a file in the future
- */
-int* processTileBitrates(char* tileBitratesStr, Config* config)
-{
-	int tbsLen = strlen(tileBitratesStr);
-	int* tileBitrates = (int*)malloc(sizeof(int) * tbsLen);
-	for (int i=0; i<strlen(tileBitratesStr); i++) {
-		// The subtraction converts the '1' or '0' to an int
-		tileBitrates[i] = tileBitratesStr[i] - '0';
-	}
-	config->numTileBitrates = tbsLen;
-	return tileBitrates;
-}
-
-/**
- * Process the command-line arguments to configure the program
- */
-void processInput(Config* config, int argc, char* argv[])
-{
-	// Default config options
-	config->highBitrate = 1600000;
-	config->lowBitrate  =  800000;
-	config->numTileCols = 3;
-	config->numTileRows = 1;
-	config->inputFilename = NULL;
-	config->outputFilename = NULL;
-	config->width = -1;
-	config->height = -1;
-	config->fps = -1;
-	config->tileBitrates = NULL;
-	// Read input
-	static struct option long_options[] = {
-		{"input", required_argument, 0, 'i'},
-		{"output", required_argument, 0, 'o'},
-		{"width", required_argument, 0, 'x'},
-		{"height", required_argument, 0, 'y'},
-		{"fps", required_argument, 0, 'f'},
-		{"high-bitrate", required_argument, 0, 'h'},
-		{"low-bitrate", required_argument, 0, 'l'},
-		{"num-tile-rows", required_argument, 0, 'r'},
-		{"num-tile-cols", required_argument, 0, 'c'},
-		{"tile-bitrates", required_argument, 0, 't'},
-		{0, 0, 0, 0}
-	};
-	int opt;
-	int option_index = 0;
-	while ((opt = getopt_long(argc, argv, "i:o:x:y:f:r:c:t:h:l:", long_options, NULL)) != -1) {
-		switch (opt) {
-			case 'i':
-				config->inputFilename = optarg;
-				break;
-			case 'o':
-				config->outputFilename = optarg;
-				break;
-			case 'x':
-				config->width = atoi(optarg);
-				break;
-			case 'y':
-				config->height = atoi(optarg);
-				break;
-			case 'f':
-				config->fps = atof(optarg);
-				break;
-			case 'h':
-				config->highBitrate = atoi(optarg);
-				break;
-			case 'l':
-				config->lowBitrate = atoi(optarg);
-				break;
-			case 'r':
-				config->numTileRows = atoi(optarg);
-				break;
-			case 'c':
-				config->numTileCols = atoi(optarg);
-				break;
-			case 't':
-				config->tileBitrates = processTileBitrates(optarg, config);
-				break;
-		}
-	}
-	// Ensure there are no missing parameters
-	if (config->inputFilename == NULL ||
-		config->outputFilename == NULL ||
-		config->width == -1 ||
-		config->height == -1 ||
-		config->fps == -1 ||
-		config->tileBitrates == NULL) {
-		printf("Error: invalid command line parameters. Aborting.\n");
-		exit(1);
-	}
-	int numTiles = config->numTileRows * config->numTileCols;
-	if (config->numTileBitrates != numTiles) {
-		printf("Error: incorrect number of tile bitrates specified. Aborting.\n");
-		exit(1);
-	}
-}
-
 int main(int argc, char* argv[])
 {
 	// Process our inputs, set up our data structures
-	config = (Config*)malloc(sizeof(Config));
-	processInput(config, argc, argv);
-	int origHeight   = config->height;
-	int paddedHeight = config->height;
+	config.processInput( argc, argv );
+	int origHeight   = config.height;
+	int paddedHeight = config.height;
 	// TODO remove? since we crop first, then separate the context groups
 #if 0
-	while( config->numTileCols * paddedHeight > 8192 )
+	while( config.numTileCols * paddedHeight > 8192 )
 	{
 		paddedHeight -= 1;
 	}
 #endif
 	printf("Original height: %d Padded height: %d\n", origHeight, paddedHeight);
-	while( paddedHeight % ( config->numTileRows * 32 ) != 0 )
+	while( paddedHeight % ( config.numTileRows * 32 ) != 0 )
 	{
 		paddedHeight -= 1;
 	}
 	printf("Original height: %d Padded height: %d\n", origHeight, paddedHeight);
 
 	// Figure out how many contexts we have for each quality
-	int stackHeight = paddedHeight * config->numTileCols;
+	int stackHeight = paddedHeight * config.numTileCols;
 	int afterFirst = 0;
 	int numContextGroups = 0;
-	int remainingTileCols = config->numTileCols;
+	int remainingTileCols = config.numTileCols;
 	while (stackHeight > 0) {
 		numContextGroups++;
 		int numTileColsInContextGroup = 0;
 		// If it's after the first column group, we also add the height of the first tile in the image to skip the header stuff
 		if (afterFirst == 1) {
 			while (((paddedHeight * (numTileColsInContextGroup + 1))
-					+ (paddedHeight / config->numTileRows) <= MAX_Y_HEIGHT)
+					+ (paddedHeight / config.numTileRows) <= MAX_Y_HEIGHT)
 				   && (remainingTileCols > 0)) {
 				numTileColsInContextGroup++;
 				remainingTileCols--;
@@ -528,35 +413,35 @@ int main(int argc, char* argv[])
 				remainingTileCols--;
 			}
 		}
-		int contextGroupHeight = paddedHeight * numTileColsInContextGroup + (afterFirst == 0 ? 0 : (paddedHeight / config->numTileRows));
-		int contextGroupWidth = config->width / config->numTileCols;
-		(config->contextGroups).push_back({numTileColsInContextGroup, contextGroupHeight, contextGroupWidth});
+		int contextGroupHeight = paddedHeight * numTileColsInContextGroup + (afterFirst == 0 ? 0 : (paddedHeight / config.numTileRows));
+		int contextGroupWidth = config.width / config.numTileCols;
+		(config.contextGroups).push_back({numTileColsInContextGroup, contextGroupHeight, contextGroupWidth});
 		stackHeight -= paddedHeight * numTileColsInContextGroup;
 		if (afterFirst == 0 && stackHeight > 0) {
 			afterFirst = 1;
 		}
 	}
 
-	FILE* inFile = fopen(config->inputFilename, "rb");
+	FILE* inFile = fopen(config.inputFilename, "rb");
 	if (inFile == NULL) {
 		printf("Error: could not open input file\n");
 		return 1;
 	}
-	FILE* outFile = fopen(config->outputFilename, "wb");
+	FILE* outFile = fopen(config.outputFilename, "wb");
 	if (outFile == NULL) {
 		printf("Error: could not open output file\n");
 		return 1;
 	}
-	bitrateValues[HIGH_BITRATE]        = config->highBitrate;
-	bitrateValues[LOW_BITRATE]         = config->lowBitrate;
-	numTiles = config->numTileRows * config->numTileCols;
-	int ySize = config->width * config->height;
+	bitrateValues[HIGH_BITRATE]        = config.highBitrate;
+	bitrateValues[LOW_BITRATE]         = config.lowBitrate;
+	numTiles = config.numTileRows * config.numTileCols;
+	int ySize = config.width * config.height;
 	int uvSize = ySize / 4;
 	vector<vector<long> > bitstreamSizes(2); // 1st dimension is quality, 2nd is contextGroup
 	int tiledBitstreamSize;
 
-	Planeset inputFrame( config->width, config->height );
-	Planeset outputFrame( config->width/NUM_SPLITS, paddedHeight*NUM_SPLITS );
+	Planeset inputFrame( config.width, config.height );
+	Planeset outputFrame( config.width/NUM_SPLITS, paddedHeight*NUM_SPLITS );
 
 	for (int i=0; i<numContextGroups; i++) {
 		bitstreams[HIGH_BITRATE].push_back((unsigned char*)malloc(sizeof(unsigned char) * BITSTREAM_SIZE));
@@ -567,25 +452,25 @@ int main(int argc, char* argv[])
 	// The main loop. Get a frame, rearrange it, send it to NVENC, stitch it, then write it out.
 	while (getNextFrame(inFile, &inputFrame, ySize))
     {
-		// config->height = paddedHeight;
+		// config.height = paddedHeight;
 		bitstreamSizes[HIGH_BITRATE].clear();
 		bitstreamSizes[LOW_BITRATE].clear();
 
-		rearrangeFrame( &inputFrame, &outputFrame, config->width, paddedHeight );
+		rearrangeFrame( &inputFrame, &outputFrame, config.width, paddedHeight );
 		encodeFrame(outputFrame.y, outputFrame.u, outputFrame.v,
-		            config->width/NUM_SPLITS, paddedHeight*NUM_SPLITS, bitstreamSizes);
+		            config.width/NUM_SPLITS, paddedHeight*NUM_SPLITS, bitstreamSizes);
 		tiledBitstreamSize = doStitching(tiledBitstream,
                                          2,
                                          bitstreams,
                                          bitstreamSizes,
-                                         config->tileBitrates,
-										 config->width,
+                                         config.tileBitrates,
+										 config.width,
                                          paddedHeight,
-                                         config->numTileRows,
-										 config->numTileCols,
-										 config->contextGroups);
+                                         config.numTileRows,
+										 config.numTileCols,
+										 config.contextGroups);
 		fwrite(tiledBitstream, sizeof(unsigned char), tiledBitstreamSize, outFile);
-		// config->height = origHeight;
+		// config.height = origHeight;
 	}
 
 	// Wrap up
@@ -602,7 +487,6 @@ int main(int argc, char* argv[])
 	av_packet_free(&pkt);
 	av_buffer_unref(&hwDeviceCtx);
 	free(tiledBitstream);
-	free(config);
 	fclose(inFile);
 	fclose(outFile);
 }
