@@ -2,15 +2,9 @@
 
 #include <vector>
 
+#include "context_group.h"
+
 using namespace std;
-
-struct ContextGroup
-{
-	int numTileCols;
-	int height; // INCLUDES the extra tile for groups which have it
-	int width;
-};
-
 
 int doStitching( unsigned char* tiledBitstream,
                  int            numQualityLevels,
