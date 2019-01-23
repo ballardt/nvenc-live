@@ -24,7 +24,7 @@ extern "C"
 #include "nvenc_config.h"
 #include "nvenc_planeset.h"
 
-#define NUM_SPLITS (config.numTileCols)
+#define NUM_SPLITS (config.getNumTileCols())
 #define BITSTREAM_SIZE 200000 // Increase if necessary; the program will let you know
 #define MAX_Y_HEIGHT 8192 // Hardware limitation
 
@@ -311,7 +311,7 @@ void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width
 	}
 	// For each encode group, put that image in the frame then encode it
 	int currTile = 0;
-	int tileHeight = height / (config.numTileRows * config.numTileCols);
+	int tileHeight = height / (config.getNumTileRows() * config.getNumTileCols());
 	for (int i=0; i<(config.contextGroups).size(); i++) {
 		// First, get the image for this encode group
 		// TODO replace with Planeset. Probably put in a different function entirely when have time.
@@ -330,12 +330,12 @@ void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width
 			uvOffset = (width*tileHeight)/4;
 		}
 		// Get the rest of the tiles
-		int yCpySize = width * tileHeight * config.numTileRows * config.contextGroups[i].numTileCols;
+		int yCpySize = width * tileHeight * config.getNumTileRows() * config.contextGroups[i].getNumTileCols();
 		int uvCpySize = yCpySize / 4;
 		memcpy(cgImageY+yOffset, y+(currTile*width*tileHeight), yCpySize);
 		memcpy(cgImageU+uvOffset, u+(currTile*width*tileHeight/4), uvCpySize);
 		memcpy(cgImageV+uvOffset, v+(currTile*width*tileHeight/4), uvCpySize);
-		currTile += config.numTileRows * config.contextGroups[i].numTileCols;
+		currTile += config.getNumTileRows() * config.contextGroups[i].getNumTileCols();
 		// Now put it in the frame and encode it
 		putImageInFrame(cgImageY, cgImageU, cgImageV, width, config.contextGroups[i].height);
 		bitstreamSizes[HIGH_BITRATE].push_back(sendFrameToNVENC(HIGH_BITRATE,
@@ -351,34 +351,34 @@ int main(int argc, char* argv[])
 {
 	// Process our inputs, set up our data structures
 	config.processInput( argc, argv );
-	int origHeight   = config.height;
-	int paddedHeight = config.height;
+	int origHeight   = config.getHeight();
+	int paddedHeight = config.getHeight();
 	// TODO remove? since we crop first, then separate the context groups
 #if 0
-	while( config.numTileCols * paddedHeight > 8192 )
+	while( config.getNumTileCols * paddedHeight > 8192 )
 	{
 		paddedHeight -= 1;
 	}
 #endif
 	printf("Original height: %d Padded height: %d\n", origHeight, paddedHeight);
-	while( paddedHeight % ( config.numTileRows * 32 ) != 0 )
+	while( paddedHeight % ( config.getNumTileRows() * 32 ) != 0 )
 	{
 		paddedHeight -= 1;
 	}
 	printf("Original height: %d Padded height: %d\n", origHeight, paddedHeight);
 
 	// Figure out how many contexts we have for each quality
-	int stackHeight = paddedHeight * config.numTileCols;
+	int stackHeight = paddedHeight * config.getNumTileCols();
 	int afterFirst = 0;
 	int numContextGroups = 0;
-	int remainingTileCols = config.numTileCols;
+	int remainingTileCols = config.getNumTileCols();
 	while (stackHeight > 0) {
 		numContextGroups++;
 		int numTileColsInContextGroup = 0;
 		// If it's after the first column group, we also add the height of the first tile in the image to skip the header stuff
 		if (afterFirst == 1) {
 			while (((paddedHeight * (numTileColsInContextGroup + 1))
-					+ (paddedHeight / config.numTileRows) <= MAX_Y_HEIGHT)
+					+ (paddedHeight / config.getNumTileRows()) <= MAX_Y_HEIGHT)
 				   && (remainingTileCols > 0)) {
 				numTileColsInContextGroup++;
 				remainingTileCols--;
@@ -391,8 +391,8 @@ int main(int argc, char* argv[])
 				remainingTileCols--;
 			}
 		}
-		int contextGroupHeight = paddedHeight * numTileColsInContextGroup + (afterFirst == 0 ? 0 : (paddedHeight / config.numTileRows));
-		int contextGroupWidth = config.width / config.numTileCols;
+		int contextGroupHeight = paddedHeight * numTileColsInContextGroup + (afterFirst == 0 ? 0 : (paddedHeight / config.getNumTileRows() ));
+		int contextGroupWidth = config.getWidth() / config.getNumTileCols();
 		(config.contextGroups).push_back({numTileColsInContextGroup, contextGroupHeight, contextGroupWidth});
 		stackHeight -= paddedHeight * numTileColsInContextGroup;
 		if (afterFirst == 0 && stackHeight > 0) {
@@ -400,26 +400,26 @@ int main(int argc, char* argv[])
 		}
 	}
 
-	FILE* inFile = fopen(config.inputFilename, "rb");
+	FILE* inFile = fopen(config.getInputFilename(), "rb");
 	if (inFile == NULL) {
 		printf("Error: could not open input file\n");
 		return 1;
 	}
-	FILE* outFile = fopen(config.outputFilename, "wb");
+	FILE* outFile = fopen(config.getOutputFilename(), "wb");
 	if (outFile == NULL) {
 		printf("Error: could not open output file\n");
 		return 1;
 	}
-	bitrateValues[HIGH_BITRATE]        = config.highBitrate;
-	bitrateValues[LOW_BITRATE]         = config.lowBitrate;
-	numTiles = config.numTileRows * config.numTileCols;
-	int ySize = config.width * config.height;
+	bitrateValues[HIGH_BITRATE]        = config.getHighBitrate();
+	bitrateValues[LOW_BITRATE]         = config.getLowBitrate();
+	numTiles = config.getNumTileRows() * config.getNumTileCols();
+	int ySize = config.getWidth() * config.getHeight();
 	int uvSize = ySize / 4;
 	vector<vector<long> > bitstreamSizes(2); // 1st dimension is quality, 2nd is contextGroup
 	int tiledBitstreamSize;
 
-	Planeset inputFrame( config.width, config.height );
-	Planeset outputFrame( config.width/NUM_SPLITS, paddedHeight*NUM_SPLITS );
+	Planeset inputFrame( config.getWidth(), config.getHeight() );
+	Planeset outputFrame( config.getWidth()/NUM_SPLITS, paddedHeight*NUM_SPLITS );
 
 	for (int i=0; i<numContextGroups; i++) {
 		bitstreams[HIGH_BITRATE].push_back((unsigned char*)malloc(sizeof(unsigned char) * BITSTREAM_SIZE));
@@ -434,18 +434,18 @@ int main(int argc, char* argv[])
 		bitstreamSizes[HIGH_BITRATE].clear();
 		bitstreamSizes[LOW_BITRATE].clear();
 
-		rearrangeFrame( &inputFrame, &outputFrame, config.width, paddedHeight );
+		rearrangeFrame( &inputFrame, &outputFrame, config.getWidth(), paddedHeight );
 		encodeFrame(outputFrame.y, outputFrame.u, outputFrame.v,
-		            config.width/NUM_SPLITS, paddedHeight*NUM_SPLITS, bitstreamSizes);
+		            config.getWidth()/NUM_SPLITS, paddedHeight*NUM_SPLITS, bitstreamSizes);
 		tiledBitstreamSize = doStitching(tiledBitstream,
                                          2,
                                          bitstreams,
                                          bitstreamSizes,
-                                         config.tileBitrates,
-										 config.width,
+                                         config.getTileBitrates(),
+										 config.getWidth(),
                                          paddedHeight,
-                                         config.numTileRows,
-										 config.numTileCols,
+                                         config.getNumTileRows(),
+										 config.getNumTileCols(),
 										 config.contextGroups);
 		fwrite(tiledBitstream, sizeof(unsigned char), tiledBitstreamSize, outFile);
 		// config.height = origHeight;

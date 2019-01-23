@@ -13,16 +13,17 @@ using namespace std;
  * Process tile bitrates
  * Implementation is sloppy, should be changed to be a file in the future
  */
-int* Config::processTileBitrates( char* tileBitratesStr )
+void Config::processTileBitrates( char* tileBitratesStr )
 {
 	int tbsLen = strlen(tileBitratesStr);
-	int* tileBitrates = (int*)malloc(sizeof(int) * tbsLen);
+    tileBitrates.resize( tbsLen );
+	// int* tileBitrates = (int*)malloc(sizeof(int) * tbsLen);
 	for (int i=0; i<strlen(tileBitratesStr); i++) {
 		// The subtraction converts the '1' or '0' to an int
 		tileBitrates[i] = tileBitratesStr[i] - '0';
 	}
-	this->numTileBitrates = tbsLen;
-	return tileBitrates;
+	// this->numTileBitrates = tbsLen;
+	// return tileBitrates;
 }
 
 /**
@@ -39,15 +40,15 @@ void Config::processInput(int argc, char* argv[])
 	this->outputFilename = NULL;
 	this->width = -1;
 	this->height = -1;
-	this->fps = -1;
-	this->tileBitrates = NULL;
+	// this->fps = -1;
+	this->tileBitrates.clear();
 	// Read input
 	static struct option long_options[] = {
 		{"input", required_argument, 0, 'i'},
 		{"output", required_argument, 0, 'o'},
 		{"width", required_argument, 0, 'x'},
 		{"height", required_argument, 0, 'y'},
-		{"fps", required_argument, 0, 'f'},
+		// {"fps", required_argument, 0, 'f'},
 		{"high-bitrate", required_argument, 0, 'h'},
 		{"low-bitrate", required_argument, 0, 'l'},
 		{"num-tile-rows", required_argument, 0, 'r'},
@@ -71,9 +72,9 @@ void Config::processInput(int argc, char* argv[])
 			case 'y':
 				this->height = atoi(optarg);
 				break;
-			case 'f':
-				this->fps = atof(optarg);
-				break;
+			// case 'f':
+				// this->fps = atof(optarg);
+				// break;
 			case 'h':
 				this->highBitrate = atoi(optarg);
 				break;
@@ -87,7 +88,8 @@ void Config::processInput(int argc, char* argv[])
 				this->numTileCols = atoi(optarg);
 				break;
 			case 't':
-				this->tileBitrates = processTileBitrates( optarg );
+				// this->tileBitrates = processTileBitrates( optarg );
+				processTileBitrates( optarg );
 				break;
 		}
 	}
@@ -96,13 +98,13 @@ void Config::processInput(int argc, char* argv[])
 		this->outputFilename == NULL ||
 		this->width == -1 ||
 		this->height == -1 ||
-		this->fps == -1 ||
-		this->tileBitrates == NULL) {
+		// this->fps == -1 ||
+		this->tileBitrates.size() == 0) {
 		printf("Error: invalid command line parameters. Aborting.\n");
 		exit(1);
 	}
 	int numTiles = this->numTileRows * this->numTileCols;
-	if (this->numTileBitrates != numTiles) {
+	if (this->tileBitrates.size() != numTiles) {
 		printf("Error: incorrect number of tile bitrates specified. Aborting.\n");
 		exit(1);
 	}

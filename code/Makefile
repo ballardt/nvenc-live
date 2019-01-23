@@ -16,7 +16,7 @@ stitch.o: stitch.cpp
 		-I/home/griff/Install/boost/include \
 		-c -o stitch.o stitch.cpp 
 
-encode.o: nvenc_encode.cpp
+encode.o: nvenc_encode.cpp nvenc_config.h
 	g++ -g -static -c -o encode.o nvenc_encode.cpp \
 		-Wno-deprecated-declarations \
 		-std=c++11 \
@@ -24,7 +24,7 @@ encode.o: nvenc_encode.cpp
 		-I/home/griff/Install/ffmpeg-nvenc/include \
 		-fvisibility=hidden
 
-config.o: nvenc_config.cpp
+config.o: nvenc_config.cpp nvenc_config.h
 	g++ -g -static -c -o config.o nvenc_config.cpp \
 		-I/home/griff/Install/boost/include \
 		-fvisibility=hidden
