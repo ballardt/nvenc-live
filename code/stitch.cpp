@@ -541,7 +541,7 @@ int doStitching( unsigned char* tiledBitstream,
 			{
                 if( i >= (int)sliceSegAddrs.size() )
                 {
-                    std::cerr << "line " << __LINE__ << " index i (" << i << ") is >= than number of tiles (" << numTiles << ")" << std::endl;
+                    // std::cerr << "line " << __LINE__ << " index i (" << i << ") is >= than number of tiles (" << numTiles << ")" << std::endl;
                 }
 
 				for (int ifs_idx=0; ifs_idx<numQualityLevels; ifs_idx++)
@@ -556,7 +556,7 @@ int doStitching( unsigned char* tiledBitstream,
 										bitstream_Size[ifs_idx][cg_idx] );
 					switch (nalType) {
 						case P_SLICE:
-                            std::cerr << "line " << __LINE__ << " case P_SLICE, i is " << i << std::endl;
+                            // std::cerr << "line " << __LINE__ << " case P_SLICE, i is " << i << std::endl;
                             if( i >= (int)sliceSegAddrs.size() )
                             {
                                 std::cerr << "line " << __LINE__ << " index i (" << i << ") is >= than number of tiles (" << numTiles << ")" << std::endl;
@@ -575,14 +575,11 @@ int doStitching( unsigned char* tiledBitstream,
 							if (ifs_idx == numQualityLevels-1)
                             {
                                 i++;
-                                std::cerr << "line " << __LINE__ << " index i is " << i << std::endl;
+                                // std::cerr << "line " << __LINE__ << " index i is " << i << std::endl;
                             }
 							break;
 						case I_SLICE:
-                            std::cerr << "line " << __LINE__ << " case I_SLICE, i is " << i
-                                      << " ifs_idx=" << ifs_idx
-                                      << " cg_idx=" << cg_idx
-                                      << std::endl;
+                            // std::cerr << "line " << __LINE__ << " case I_SLICE, i is " << i << " ifs_idx=" << ifs_idx << " cg_idx=" << cg_idx << std::endl;
                             if( i >= (int)sliceSegAddrs.size() )
                             {
                                 std::cerr << "line " << __LINE__ << " index i (" << i << ") is >= than number of tiles (" << numTiles << ")" << std::endl;
@@ -602,7 +599,7 @@ int doStitching( unsigned char* tiledBitstream,
 							if (ifs_idx == numQualityLevels-1)
                             {
                                 i++;
-                                std::cerr << "line " << __LINE__ << " index i is " << i << std::endl;
+                                // std::cerr << "line " << __LINE__ << " index i is " << i << std::endl;
                             }
 							break;
 						case SPS:
@@ -620,7 +617,7 @@ int doStitching( unsigned char* tiledBitstream,
 							}
 							break;
 						case VPS:
-                            std::cerr << "line " << __LINE__ << " case VPS, i is " << i << std::endl;
+                            // std::cerr << "line " << __LINE__ << " case VPS, i is " << i << std::endl;
 							if (ifs_idx==0) {
 								std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
 								totalSize += nal.size();
@@ -631,7 +628,7 @@ int doStitching( unsigned char* tiledBitstream,
 							//if (ifs_idx == numQualityLevels-1) i = 0;
 							break;
 						case SEI:
-                            std::cerr << "line " << __LINE__ << " case SEI, i is " << i << std::endl;
+                            // std::cerr << "line " << __LINE__ << " case SEI, i is " << i << std::endl;
 							if (ifs_idx==0) {
 								std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
 								totalSize += nal.size();
@@ -642,10 +639,10 @@ int doStitching( unsigned char* tiledBitstream,
 							//if (ifs_idx == numQualityLevels-1) i = 0;
 							break;
 						case OTHER:
-                            std::cerr << "line " << __LINE__ << " case OTHER, i is " << i << std::endl;
+                            // std::cerr << "line " << __LINE__ << " case OTHER, i is " << i << std::endl;
 							break;
 						case -1:
-                            std::cerr << "line " << __LINE__ << " case -1, i is " << i << std::endl;
+                            // std::cerr << "line " << __LINE__ << " case -1, i is " << i << std::endl;
 							if (ifs_idx == numQualityLevels-1 && cg_idx == contextGroups.size()-1) {
 								goto done;
 							}

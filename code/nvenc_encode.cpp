@@ -325,7 +325,7 @@ void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width
     {
 		initializeHardware();
 		// For each context group
-        std::cerr << __LINE__ << " context group size: " << config.contextGroups.size() << std::endl;
+        std::cerr << "line " << __LINE__ << " (nvenc_encode): context group size: " << config.contextGroups.size() << std::endl;
 		for (int i=0; i<config.contextGroups.size(); i++) {
 			initializeContext(HIGH_BITRATE, width, (config.contextGroups[i]).height);
 			initializeContext(LOW_BITRATE, width, (config.contextGroups[i]).height);
