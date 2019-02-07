@@ -1,21 +1,20 @@
 #pragma once
 
 #include <vector>
+#include <memory>
 
 #include "context_group.h"
 
-using namespace std;
-
 int doStitching( unsigned char* tiledBitstream,
                  int            numQualityLevels,
-                 vector<vector<unsigned char*> >& bitstreams,
-                 vector<vector<long> >& bitstream_Size,
+                 std::vector<std::vector<unsigned char*> >& bitstreams,
+                 std::vector<std::vector<long> >& bitstream_Size,
                  int*           tileBitrates,
                  int            finalWidth,
                  int            finalHeight,
                  int            numTileRows,
                  int            numTileCols,
-                 vector<ContextGroup>& contextGroups);
+                 std::vector<std::shared_ptr<ContextGroup> >& contextGroups);
 
 // extern unsigned char* bitstreams[4];
 extern unsigned char* tiledBitstream;

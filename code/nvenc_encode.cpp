@@ -163,13 +163,13 @@ void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width
                 hw.initializeContext(
                     bitrateValues[HIGH_BITRATE],
                     width,
-                    config.contextGroups[i].height,
+                    config.contextGroups[i]->height,
                     numTiles ) );
             codecContextArr[LOW_BITRATE].push_back(
 			    hw.initializeContext(
                     bitrateValues[LOW_BITRATE],
                     width,
-                    config.contextGroups[i].height,
+                    config.contextGroups[i]->height,
                     numTiles ) );
 		}
 	}
@@ -179,7 +179,7 @@ void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width
 	for (int i=0; i<(config.contextGroups).size(); i++) {
 		// First, get the image for this encode group
 		// TODO replace with Planeset. Probably put in a different function entirely when have time.
-		int imageSize = config.contextGroups[i].width * config.contextGroups[i].height;
+		int imageSize = config.contextGroups[i]->width * config.contextGroups[i]->height;
 		int yOffset = 0;
 		int uvOffset = 0;
 		unsigned char* cgImageY = new unsigned char[imageSize];
@@ -194,14 +194,14 @@ void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width
 			uvOffset = (width*tileHeight)/4;
 		}
 		// Get the rest of the tiles
-		int yCpySize = width * tileHeight * config.numTileRows * config.contextGroups[i].numTileCols;
+		int yCpySize = width * tileHeight * config.numTileRows * config.contextGroups[i]->numTileCols;
 		int uvCpySize = yCpySize / 4;
 		memcpy(cgImageY+yOffset, y+(currTile*width*tileHeight), yCpySize);
 		memcpy(cgImageU+uvOffset, u+(currTile*width*tileHeight/4), uvCpySize);
 		memcpy(cgImageV+uvOffset, v+(currTile*width*tileHeight/4), uvCpySize);
-		currTile += config.numTileRows * config.contextGroups[i].numTileCols;
+		currTile += config.numTileRows * config.contextGroups[i]->numTileCols;
 		// Now put it in the frame and encode it
-		hw.putImageInFrame(cgImageY, cgImageU, cgImageV, width, config.contextGroups[i].height);
+		hw.putImageInFrame(cgImageY, cgImageU, cgImageV, width, config.contextGroups[i]->height);
 		bitstreamSizes[HIGH_BITRATE].push_back(sendFrameToNVENC(HIGH_BITRATE,
                                                                 i,
                                                                 bitstreams[HIGH_BITRATE][i]));
@@ -260,7 +260,12 @@ int main(int argc, char* argv[])
 		}
 		int contextGroupHeight = paddedHeight * numTileColsInContextGroup + (afterFirst == 0 ? 0 : (paddedHeight / config.numTileRows));
 		int contextGroupWidth = config.width / config.numTileCols;
-		config.contextGroups.push_back({numTileColsInContextGroup, contextGroupHeight, contextGroupWidth});
+        std::shared_ptr<ContextGroup> ptr = std::make_shared<ContextGroup>(
+                                                    numTileColsInContextGroup,
+                                                    contextGroupHeight,
+                                                    contextGroupWidth );
+		config.contextGroups.push_back( ptr );
+
 		stackHeight -= paddedHeight * numTileColsInContextGroup;
 		if (afterFirst == 0 && stackHeight > 0) {
 			afterFirst = 1;

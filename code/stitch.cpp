@@ -11,6 +11,8 @@
 
 #include "link_stitcher.h"
 
+using namespace std;
+
 typedef unsigned char Block;
 typedef boost::dynamic_bitset<Block> Bitset;
 
@@ -484,7 +486,7 @@ int doStitching( unsigned char* tiledBitstream,
                  int            finalHeight,
                  int            numTileRows,
 				 int            numTileCols,
-				 vector<ContextGroup>& contextGroups)
+				 vector<shared_ptr<ContextGroup> >& contextGroups)
 {
 	int totalSize = 0;
 	int tbPos = 0;
@@ -535,7 +537,7 @@ int doStitching( unsigned char* tiledBitstream,
 			// will cause us to iterate all context groups at once, which does not seem right since
 			// context groups may be of different sizes.
 			if (cg_idx > 0) {
-				iBase += contextGroups[cg_idx-1].numTileCols * numTileRows;
+				iBase += contextGroups[cg_idx-1]->numTileCols * numTileRows;
 			}
 			do
 			{

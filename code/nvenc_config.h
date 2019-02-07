@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <memory>
 
 #include "context_group.h"
 
@@ -17,7 +18,7 @@ struct Config
 	int numTileRows; // TODO
 	int* tileBitrates; // TODO
 	int numTileBitrates;
-	std::vector<ContextGroup> contextGroups;
+	std::vector<std::shared_ptr<ContextGroup> > contextGroups;
     
     void processInput(int argc, char* argv[]);
     int* processTileBitrates( char* tileBitratesStr );

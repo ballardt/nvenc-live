@@ -1,8 +1,8 @@
 all: encode
 
-encode: nvenc_hw.o nvenc_encode.o nvenc_config.o stitch.o
+encode: nvenc_hw.o nvenc_encode.o nvenc_config.o stitch.o context_group.o
 	g++ -g -o encode \
-		nvenc_hw.o nvenc_encode.o nvenc_config.o stitch.o \
+		nvenc_hw.o nvenc_encode.o nvenc_config.o stitch.o context_group.o \
 		-I/home/griff/Install/ffmpeg-nvenc/include \
 		-L/home/griff/Install/ffmpeg-nvenc/lib \
 		-Wl,-rpath=/home/griff/Install/ffmpeg-nvenc/lib \
@@ -26,6 +26,14 @@ nvenc_encode.o: nvenc_encode.cpp
 
 nvenc_hw.o: nvenc_hw.cpp
 	g++ -g -static -c -o nvenc_hw.o nvenc_hw.cpp \
+		-Wno-deprecated-declarations \
+		-std=c++11 \
+		-I/home/griff/Install/boost/include \
+		-I/home/griff/Install/ffmpeg-nvenc/include \
+		-fvisibility=hidden
+
+context_group.o: context_group.cpp
+	g++ -g -static -c -o context_group.o context_group.cpp \
 		-Wno-deprecated-declarations \
 		-std=c++11 \
 		-I/home/griff/Install/boost/include \
