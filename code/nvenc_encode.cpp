@@ -34,7 +34,6 @@ using namespace std;
 
 static int hardwareInitialized = 0;
 
-vector<vector<unsigned char*> > bitstreams(2); // 1st dimension is bitrate, 2nd is context group
 unsigned char* tiledBitstream;
 
 int bitrateValues[4];
@@ -103,16 +102,19 @@ int sendFrameToNVENC(Bitrate bitrate, int contextGroupIdx, unsigned char* bitstr
 	int ret;
 	if ((ret = avcodec_send_frame(
                     config.contextGroups[contextGroupIdx]->getContext(bitrate),
-                    hw.frame)) < 0) {
+                    hw.frame)) < 0)
+    {
 		printf("Error sending frame for encoding\n");
 		exit(1);
 	}
+
 	// Try to receive packets until there are none
 	while (ret >= 0) {
 		ret = avcodec_receive_packet(
                     config.contextGroups[contextGroupIdx]->getContext(bitrate),
                     hw.pkt);
-		if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+		if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+        {
 			// Note: we always return here
 			memcpy(bitstream+bsPos, hw.pkt->data, hw.pkt->size);
 			int frameSize = bsPos + hw.pkt->size;
@@ -128,20 +130,24 @@ int sendFrameToNVENC(Bitrate bitrate, int contextGroupIdx, unsigned char* bitstr
 			av_packet_unref(hw.pkt);
 			return frameSize;
 		}
-		else if (ret < 0) {
+		else if (ret < 0)
+        {
 			printf("Error during encoding\n");
 			exit(1);
 		}
-		// Get the data from the GPU
-		// Note: this never gets executed...
-		memcpy(bitstream+bsPos, hw.pkt->data, hw.pkt->size);
-		bsPos += hw.pkt->size;
+        else
+        {
+		    // Get the data from the GPU
+		    // Note: this never gets executed...
+		    memcpy(bitstream+bsPos, hw.pkt->data, hw.pkt->size);
+		    bsPos += hw.pkt->size;
 #if 1
-		dbg_file = fopen( "writeme.hevc", "ab" );
-		fwrite(hw.pkt->data, 1, hw.pkt->size, dbg_file);
-		fclose(dbg_file);
+		    dbg_file = fopen( "writeme.hevc", "ab" );
+		    fwrite(hw.pkt->data, 1, hw.pkt->size, dbg_file);
+		    fclose(dbg_file);
 #endif
-		av_packet_unref(hw.pkt);
+		    av_packet_unref(hw.pkt);
+        }
 	}
 }
 
@@ -203,12 +209,16 @@ void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width
 		currTile += config.numTileRows * config.contextGroups[i]->numTileCols;
 		// Now put it in the frame and encode it
 		hw.putImageInFrame(cgImageY, cgImageU, cgImageV, width, config.contextGroups[i]->height);
-		bitstreamSizes[HIGH_BITRATE].push_back(sendFrameToNVENC(HIGH_BITRATE,
-                                                                i,
-                                                                bitstreams[HIGH_BITRATE][i]));
-		bitstreamSizes[LOW_BITRATE].push_back(sendFrameToNVENC(LOW_BITRATE,
-                                                               i,
-                                                               bitstreams[LOW_BITRATE][i]));
+		bitstreamSizes[HIGH_BITRATE].push_back(
+            sendFrameToNVENC(
+                HIGH_BITRATE,
+                i,
+                config.contextGroups[i]->getBitstream(HIGH_BITRATE) ) );
+		bitstreamSizes[LOW_BITRATE].push_back(
+            sendFrameToNVENC(
+                LOW_BITRATE,
+                i,
+                config.contextGroups[i]->getBitstream(LOW_BITRATE) ) );
 		delete [] cgImageY;
 		delete [] cgImageU;
 		delete [] cgImageV;
@@ -295,8 +305,8 @@ int main(int argc, char* argv[])
 	Planeset outputFrame( config.width/NUM_SPLITS, paddedHeight*NUM_SPLITS );
 
 	for (int i=0; i<numContextGroups; i++) {
-		bitstreams[HIGH_BITRATE].push_back((unsigned char*)malloc(sizeof(unsigned char) * BITSTREAM_SIZE));
-		bitstreams[LOW_BITRATE].push_back((unsigned char*)malloc(sizeof(unsigned char) * BITSTREAM_SIZE));
+        config.contextGroups[i]->createBitstream( HIGH_BITRATE, BITSTREAM_SIZE );
+        config.contextGroups[i]->createBitstream( LOW_BITRATE,  BITSTREAM_SIZE );
 	}
 	tiledBitstream = (unsigned char*)malloc(sizeof(unsigned char) * BITSTREAM_SIZE);
 
@@ -312,7 +322,7 @@ int main(int argc, char* argv[])
 		            config.width/NUM_SPLITS, paddedHeight*NUM_SPLITS, bitstreamSizes);
 		tiledBitstreamSize = doStitching(tiledBitstream,
                                          2,
-                                         bitstreams,
+                                         // bitstreams,
                                          bitstreamSizes,
                                          config.tileBitrates,
 										 config.width,
@@ -327,11 +337,16 @@ int main(int argc, char* argv[])
 	// Wrap up
 	// TODO: put a lot of these in a big for loop iterating over the context groups
 	for (int i=0; i<numContextGroups; i++) {
-		sendFrameToNVENC(HIGH_BITRATE, i, bitstreams[HIGH_BITRATE][i]);
-		sendFrameToNVENC(LOW_BITRATE, i, bitstreams[LOW_BITRATE][i]);
+		sendFrameToNVENC(
+            HIGH_BITRATE,
+            i,
+            config.contextGroups[i]->getBitstream(HIGH_BITRATE) );
+		sendFrameToNVENC(
+            LOW_BITRATE,
+            i,
+            config.contextGroups[i]->getBitstream(LOW_BITRATE) );
         config.contextGroups[i]->freeContexts();
-		free(bitstreams[HIGH_BITRATE][i]);
-		free(bitstreams[LOW_BITRATE][i]);
+        config.contextGroups[i]->freeBitstreams();
 	}
 	free(tiledBitstream);
 	fclose(inFile);

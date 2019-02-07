@@ -71,3 +71,44 @@ void ContextGroup::freeContexts( )
     contexts.clear();
 }
 
+void ContextGroup::createBitstream( Bitrate b, size_t sz )
+{
+    BMap::iterator it;
+    it = bitstreams.find( b );
+    if( it == bitstreams.end() )
+    {
+        bitstreams.insert( BPair( b, new unsigned char[sz] ) );
+    }
+    else
+    {
+        std::cerr << "line " << __LINE__ << " (context_group.cpp): trying to insert bitstream twice for the same bitrate " << b << " - ignoring" << std::endl;
+    }
+}
+
+unsigned char* ContextGroup::getBitstream( Bitrate b )
+{
+    BMap::iterator it;
+    it = bitstreams.find( b );
+    if( it != bitstreams.end() )
+    {
+        return it->second;
+    }
+    else
+    {
+        std::cerr << "line " << __LINE__ << " (context_group.cpp): trying to get bitstream for bitrate " << b << " that does not exist - returning 0" << std::endl;
+        return 0;
+    }
+}
+
+void ContextGroup::freeBitstreams( )
+{
+    BMap::iterator it  = bitstreams.begin();
+    BMap::iterator end = bitstreams.end();
+    while( it != end )
+    {
+        delete [] it->second;
+        it++;
+    }
+    bitstreams.clear();
+}
+
