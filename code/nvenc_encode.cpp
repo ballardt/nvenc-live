@@ -93,8 +93,11 @@ void rearrangeFrame( Planeset* input, Planeset* output, int yWidth,
 
 FILE* dbg_file = 0;
 
-int sendFrameToNVENC(Bitrate bitrate, int contextGroupIdx, unsigned char* bitstream)
+int sendFrameToNVENC(Bitrate bitrate, int contextGroupIdx)
 {
+
+    unsigned char* bitstream = config.contextGroups[contextGroupIdx]->getBitstream(bitrate);
+
 	int bsPos = 0;
 	hw.pkt->data = NULL;
 	hw.pkt->size = 0;
@@ -209,16 +212,8 @@ void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width
 		currTile += config.numTileRows * config.contextGroups[i]->numTileCols;
 		// Now put it in the frame and encode it
 		hw.putImageInFrame(cgImageY, cgImageU, cgImageV, width, config.contextGroups[i]->height);
-		bitstreamSizes[HIGH_BITRATE].push_back(
-            sendFrameToNVENC(
-                HIGH_BITRATE,
-                i,
-                config.contextGroups[i]->getBitstream(HIGH_BITRATE) ) );
-		bitstreamSizes[LOW_BITRATE].push_back(
-            sendFrameToNVENC(
-                LOW_BITRATE,
-                i,
-                config.contextGroups[i]->getBitstream(LOW_BITRATE) ) );
+		bitstreamSizes[HIGH_BITRATE].push_back( sendFrameToNVENC( HIGH_BITRATE, i ) );
+		bitstreamSizes[LOW_BITRATE] .push_back( sendFrameToNVENC( LOW_BITRATE,  i ) );
 		delete [] cgImageY;
 		delete [] cgImageU;
 		delete [] cgImageV;
@@ -337,14 +332,8 @@ int main(int argc, char* argv[])
 	// Wrap up
 	// TODO: put a lot of these in a big for loop iterating over the context groups
 	for (int i=0; i<numContextGroups; i++) {
-		sendFrameToNVENC(
-            HIGH_BITRATE,
-            i,
-            config.contextGroups[i]->getBitstream(HIGH_BITRATE) );
-		sendFrameToNVENC(
-            LOW_BITRATE,
-            i,
-            config.contextGroups[i]->getBitstream(LOW_BITRATE) );
+		sendFrameToNVENC( HIGH_BITRATE, i );
+		sendFrameToNVENC( LOW_BITRATE, i );
         config.contextGroups[i]->freeContexts();
         config.contextGroups[i]->freeBitstreams();
 	}
