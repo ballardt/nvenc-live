@@ -33,7 +33,6 @@ extern "C"
 using namespace std;
 
 static int hardwareInitialized = 0;
-vector<vector<AVCodecContext*> > codecContextArr(2); // 1st dimension is bitrate, 2nd is context group
 
 vector<vector<unsigned char*> > bitstreams(2); // 1st dimension is bitrate, 2nd is context group
 unsigned char* tiledBitstream;
@@ -102,13 +101,17 @@ int sendFrameToNVENC(Bitrate bitrate, int contextGroupIdx, unsigned char* bitstr
 	hw.pkt->size = 0;
 	// Send the frame
 	int ret;
-	if ((ret = avcodec_send_frame(codecContextArr[bitrate][contextGroupIdx], hw.frame)) < 0) {
+	if ((ret = avcodec_send_frame(
+                    config.contextGroups[contextGroupIdx]->getContext(bitrate),
+                    hw.frame)) < 0) {
 		printf("Error sending frame for encoding\n");
 		exit(1);
 	}
 	// Try to receive packets until there are none
 	while (ret >= 0) {
-		ret = avcodec_receive_packet(codecContextArr[bitrate][contextGroupIdx], hw.pkt);
+		ret = avcodec_receive_packet(
+                    config.contextGroups[contextGroupIdx]->getContext(bitrate),
+                    hw.pkt);
 		if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
 			// Note: we always return here
 			memcpy(bitstream+bsPos, hw.pkt->data, hw.pkt->size);
@@ -148,20 +151,22 @@ int sendFrameToNVENC(Bitrate bitrate, int contextGroupIdx, unsigned char* bitstr
 void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width,
 				 int height, vector<vector<long> > &bitstreamSizes)
 {
-    if( codecContextArr[0].empty() )
-	// if(codecContextArr[0][0] == NULL)
+    static bool first_time = true;
+    if( first_time )
     {
+        first_time = false;
+
 		hw.initialize();
 		// For each context group
         std::cerr << "line " << __LINE__ << " (nvenc_encode): context group size: " << config.contextGroups.size() << std::endl;
 		for (int i=0; i<config.contextGroups.size(); i++) {
-            codecContextArr[HIGH_BITRATE].push_back(
+            config.contextGroups[i]->setContext( HIGH_BITRATE,
                 hw.initializeContext(
                     bitrateValues[HIGH_BITRATE],
                     width,
                     config.contextGroups[i]->height,
                     numTiles ) );
-            codecContextArr[LOW_BITRATE].push_back(
+            config.contextGroups[i]->setContext( LOW_BITRATE,
 			    hw.initializeContext(
                     bitrateValues[LOW_BITRATE],
                     width,
@@ -324,8 +329,7 @@ int main(int argc, char* argv[])
 	for (int i=0; i<numContextGroups; i++) {
 		sendFrameToNVENC(HIGH_BITRATE, i, bitstreams[HIGH_BITRATE][i]);
 		sendFrameToNVENC(LOW_BITRATE, i, bitstreams[LOW_BITRATE][i]);
-		avcodec_free_context(&codecContextArr[HIGH_BITRATE][i]);
-		avcodec_free_context(&codecContextArr[LOW_BITRATE][i]);
+        config.contextGroups[i]->freeContexts();
 		free(bitstreams[HIGH_BITRATE][i]);
 		free(bitstreams[LOW_BITRATE][i]);
 	}
