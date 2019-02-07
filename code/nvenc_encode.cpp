@@ -24,6 +24,7 @@ extern "C"
 #include "nvenc_config.h"
 #include "nvenc_planeset.h"
 #include "nvenc_hw.h"
+#include "nvenc_bitrates.h"
 
 #define NUM_SPLITS (config.numTileCols)
 #define BITSTREAM_SIZE 200000 // Increase if necessary; the program will let you know
@@ -37,11 +38,6 @@ vector<vector<AVCodecContext*> > codecContextArr(2); // 1st dimension is bitrate
 vector<vector<unsigned char*> > bitstreams(2); // 1st dimension is bitrate, 2nd is context group
 unsigned char* tiledBitstream;
 
-enum Bitrate
-{
-	HIGH_BITRATE = 0,
-	LOW_BITRATE
-};
 int bitrateValues[4];
 
 int numTiles; // Should we pass instead? Makes sense to be global, but kind of sloppy
