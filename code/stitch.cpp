@@ -33,7 +33,8 @@ std::map<int, Bitset> ctuOffsetBits;
  * The type is dictated by the first 6 bits after the (3-byte + 1-bit) border.
  * Keep it simple with bitmasks, no need to use Bitsets.
  */
-NALType getNALType(std::vector<Block>& nal) {
+NALType getNALType(std::vector<Block>& nal)
+{
 	NALType nalType;
 	int typeBitsOffset = 3;
 	// Move past any extra 0x00's. This is mostly for VPS.
@@ -80,10 +81,13 @@ NALType getNALType(std::vector<Block>& nal) {
  *
  * Returns the NAL type, or -1 if there are no more NALs in the stream.
  */
-int getNextNAL(unsigned char* bytes, std::vector<Block>* buf, long* bytesPos, long bytesSize)
+int getNextNAL( std::shared_ptr<ContextGroup> group, Bitrate ifs_idx, std::vector<Block>* buf )
 {
+    unsigned char* bytes     = group->getBitstream( ifs_idx );
+    long&          bytesPos  = group->getBitstreamPosRef( ifs_idx );
+    long           bytesSize = group->getBitstreamSize( ifs_idx );
 #if 0
-    std::cerr << "Enter getNextNAL with " << *bytesPos << std::endl;
+    std::cerr << "Enter getNextNAL with " << bytesPos << std::endl;
     unsigned char* p = bytes;
     for( int i=0; i<10; i++ )
     {
@@ -94,26 +98,26 @@ int getNextNAL(unsigned char* bytes, std::vector<Block>* buf, long* bytesPos, lo
         std::cerr << std::endl;
     }
 #endif
-	if (*bytesPos >= bytesSize) {
+	if (bytesPos >= bytesSize) {
 		return -1;
 	}
 	// Go past the first border and consume it.
 	int zeroCounter = 0;
 	unsigned char c = 0xFF;
-	while ((zeroCounter < 2 || c != 0x01) && *bytesPos < bytesSize) {
-		c = bytes[*bytesPos];
+	while ((zeroCounter < 2 || c != 0x01) && bytesPos < bytesSize) {
+		c = bytes[bytesPos];
 		buf->push_back(c);
-		(*bytesPos)++;
+		bytesPos++;
 		if (c == 0x00) {
 			zeroCounter++;
 		}
 	}
 	// Stop when we encounter the next border. Do not consume it.
 	zeroCounter = 0;
-	while ((zeroCounter < 2 || c != 0x01) && *bytesPos < bytesSize) {
-		c = bytes[*bytesPos];
+	while ((zeroCounter < 2 || c != 0x01) && bytesPos < bytesSize) {
+		c = bytes[bytesPos];
 		buf->push_back(c);
-		(*bytesPos)++;
+		bytesPos++;
 		if (c == 0x00) {
 			zeroCounter++;
 		}
@@ -122,7 +126,7 @@ int getNextNAL(unsigned char* bytes, std::vector<Block>* buf, long* bytesPos, lo
 		}
 	}
 	if (zeroCounter >= 2 && (unsigned char)c == 0x01) {
-		(*bytesPos) -= 3;
+		bytesPos -= 3;
 		buf->pop_back();
 		buf->pop_back();
 		buf->pop_back();
@@ -488,12 +492,15 @@ int doStitching( unsigned char* tiledBitstream,
 {
 	int totalSize = 0;
 	int tbPos = 0;
-	long bitstream_Pos[numQualityLevels][contextGroups.size()];
-	for (int i=0; i<contextGroups.size(); i++) {
-	    for (int j=0; j<numQualityLevels; j++) {
-		    bitstream_Pos[j][i] = 0;
+
+    for( auto group : contextGroups )
+    {
+        if( group->valid() == false )
+        {
+            std::cerr << "Working on an invalid group struct" << std::endl;
         }
-	}
+        group->clearBitstreamPos( );
+    }
 	std::vector<Block> nal;
 
 	// Get as many NALs as we have in the stream
@@ -547,20 +554,17 @@ int doStitching( unsigned char* tiledBitstream,
 				for (int ifs_idx=0; ifs_idx<numQualityLevels; ifs_idx++)
 				{
 					if (cg_idx > 0 && i == -1) {
-						bitstream_Pos[ifs_idx][cg_idx] = posAfterFirstTile[ifs_idx];
+                        contextGroups[cg_idx]->setBitstreamPos( (Bitrate)ifs_idx, posAfterFirstTile[ifs_idx] );
 						i = iBase;
 					}
-					nalType = getNextNAL(
-                                    contextGroups[cg_idx]->getBitstream( (Bitrate)ifs_idx ),
-                                    &nal,
-                                    &bitstream_Pos[ifs_idx][cg_idx],
-                                    contextGroups[cg_idx]->getBitstreamSize( (Bitrate)ifs_idx ) );
+					nalType = getNextNAL( contextGroups[cg_idx], (Bitrate)ifs_idx, &nal );
+
 					switch (nalType) {
 						case P_SLICE:
                             // std::cerr << "line " << __LINE__ << " case P_SLICE, i is " << i << std::endl;
                             if( i >= (int)sliceSegAddrs.size() )
                             {
-                                std::cerr << "line " << __LINE__ << " index i (" << i << ") is >= than number of tiles (" << numTiles << ")" << std::endl;
+                                std::cerr << "line " << __LINE__ << " (stitch.cpp): index i (" << i << ") is >= than number of tiles (" << numTiles << ")" << std::endl;
                                 exit( -1 );
                             }
 
@@ -571,7 +575,7 @@ int doStitching( unsigned char* tiledBitstream,
 								totalSize += nal.size();
 							}
 							if (cg_idx == 0 && i == 0) {
-								posAfterFirstTile[ifs_idx] = bitstream_Pos[ifs_idx][cg_idx];
+								posAfterFirstTile[ifs_idx] = contextGroups[cg_idx]->getBitstreamPos( (Bitrate)ifs_idx );
 							}
 							if (ifs_idx == numQualityLevels-1)
                             {
@@ -583,7 +587,7 @@ int doStitching( unsigned char* tiledBitstream,
                             // std::cerr << "line " << __LINE__ << " case I_SLICE, i is " << i << " ifs_idx=" << ifs_idx << " cg_idx=" << cg_idx << std::endl;
                             if( i >= (int)sliceSegAddrs.size() )
                             {
-                                std::cerr << "line " << __LINE__ << " index i (" << i << ") is >= than number of tiles (" << numTiles << ")" << std::endl;
+                                std::cerr << "line " << __LINE__ << " (stitch.cpp): index i (" << i << ") is >= than number of tiles (" << numTiles << ")" << std::endl;
                                 exit( -1 );
                             }
 
@@ -595,7 +599,7 @@ int doStitching( unsigned char* tiledBitstream,
 							}
 							// If this is the first tile in the first context group, save the pos
 							if (cg_idx == 0 && i == 0) {
-								posAfterFirstTile[ifs_idx] = bitstream_Pos[ifs_idx][cg_idx];
+								posAfterFirstTile[ifs_idx] = contextGroups[cg_idx]->getBitstreamPos( (Bitrate)ifs_idx );
 							}
 							if (ifs_idx == numQualityLevels-1)
                             {

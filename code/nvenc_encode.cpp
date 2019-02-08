@@ -38,8 +38,6 @@ unsigned char* tiledBitstream;
 
 int bitrateValues[4];
 
-int numTiles; // Should we pass instead? Makes sense to be global, but kind of sloppy
-
 Config config;
 
 Hardware hw;
@@ -172,14 +170,14 @@ void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width
                 hw.initializeContext(
                     bitrateValues[HIGH_BITRATE],
                     width,
-                    config.contextGroups[i]->height,
-                    numTiles ) );
+                    config.contextGroups[i]->getHeight(),
+                    config.getNumTiles() ) );
             config.contextGroups[i]->setContext( LOW_BITRATE,
 			    hw.initializeContext(
                     bitrateValues[LOW_BITRATE],
                     width,
-                    config.contextGroups[i]->height,
-                    numTiles ) );
+                    config.contextGroups[i]->getHeight(),
+                    config.getNumTiles() ) );
 		}
 	}
 	// For each encode group, put that image in the frame then encode it
@@ -198,14 +196,14 @@ void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width
         Planeset& cgImage = config.contextGroups[i]->getPlaneset( );
 
 #if 1
-        if( width > config.contextGroups[i]->width )
+        if( width > config.contextGroups[i]->getWidth() )
         {
-            std::cerr << "line " << __LINE__ << " (nvenc_encode.cpp): " << "tile width " << width << " is larger than expected context group width " << config.contextGroups[i]->width << std::endl;
+            std::cerr << "line " << __LINE__ << " (nvenc_encode.cpp): " << "tile width " << width << " is larger than expected context group width " << config.contextGroups[i]->getWidth() << std::endl;
             exit( -1 );
         }
-        if( tileHeight > config.contextGroups[i]->height )
+        if( tileHeight > config.contextGroups[i]->getHeight() )
         {
-            std::cerr << "line " << __LINE__ << " (nvenc_encode.cpp): " << "tile height " << tileHeight << " is larger than expected context group height " << config.contextGroups[i]->height << std::endl;
+            std::cerr << "line " << __LINE__ << " (nvenc_encode.cpp): " << "tile height " << tileHeight << " is larger than expected context group height " << config.contextGroups[i]->getHeight() << std::endl;
             exit( -1 );
         }
 #endif
@@ -226,7 +224,7 @@ void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width
 		currTile += config.numTileRows * config.contextGroups[i]->numTileCols;
 
 		// Now put it in the frame and encode it
-		hw.putImageInFrame(cgImage.y, cgImage.u, cgImage.v, width, config.contextGroups[i]->height);
+		hw.putImageInFrame(cgImage.y, cgImage.u, cgImage.v, width, config.contextGroups[i]->getHeight());
 
         config.contextGroups[i]->setBitstreamSize(
             HIGH_BITRATE,
@@ -310,7 +308,6 @@ int main(int argc, char* argv[])
 	}
 	bitrateValues[HIGH_BITRATE]        = config.highBitrate;
 	bitrateValues[LOW_BITRATE]         = config.lowBitrate;
-	numTiles = config.numTileRows * config.numTileCols;
 	int ySize = config.width * config.height;
 	int uvSize = ySize / 4;
 	int tiledBitstreamSize;

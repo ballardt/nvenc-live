@@ -19,15 +19,18 @@ extern "C"
 #include "context_group.h"
 
 ContextGroup::ContextGroup( int n, int h, int w )
-    : numTileCols(n)
+    : _valid( true )
+    , numTileCols(n)
     , height(h)
     , width(w)
     , cgImage( w, h )
 {
+    std::cerr << "line " << __LINE__ << " (context_group.cpp): creating a context group with width " << w << " and height " << h << std::endl;
 }
 
 ContextGroup::~ContextGroup( )
 {
+    _valid = false;
 }
 
 void ContextGroup::setContext( Bitrate b, AVCodecContext* ctx )
@@ -118,6 +121,9 @@ void ContextGroup::freeBitstreams( )
     bitstreams.clear();
 }
 
+/*************************************************************
+ * bitstream sizes
+ *************************************************************/
 void ContextGroup::setBitstreamSize( Bitrate b, long sz )
 {
     SMap::iterator it;
@@ -166,6 +172,76 @@ void ContextGroup::clearBitstreamSizes( )
     bitstreamSizes.clear();
 }
 
+/*************************************************************
+ * bitstream pos
+ *************************************************************/
+void ContextGroup::setBitstreamPos( Bitrate b, long sz )
+{
+    SMap::iterator it;
+    it = bitstreamPos.find( b );
+    if( it == bitstreamPos.end() )
+    {
+        bitstreamPos.insert( SPair( b, sz ) );
+    }
+    else
+    {
+        it->second = sz;
+    }
+}
+
+void ContextGroup::incBitstreamPos( Bitrate b, long sz )
+{
+    SMap::iterator it;
+    it = bitstreamPos.find( b );
+    if( it == bitstreamPos.end() )
+    {
+        bitstreamPos.insert( SPair( b, sz ) );
+    }
+    else
+    {
+        it->second += sz;
+    }
+}
+
+long ContextGroup::getBitstreamPos( Bitrate b ) const
+{
+    SMap::const_iterator it;
+    it = bitstreamPos.find( b );
+    if( it != bitstreamPos.end() )
+    {
+        return it->second;
+    }
+    else
+    {
+        std::cerr << "line " << __LINE__ << " (context_group.cpp): trying to get bitstreamPos for bitrate " << b << " that does not exist - returning 0" << std::endl;
+        return 0;
+    }
+}
+
+long& ContextGroup::getBitstreamPosRef( Bitrate b )
+{
+    SMap::iterator it;
+    it = bitstreamPos.find( b );
+    if( it != bitstreamPos.end() )
+    {
+        return it->second;
+    }
+    else
+    {
+        bitstreamPos.insert( SPair( b, 0 ) );
+        it = bitstreamPos.find( b );
+        return it->second;
+    }
+}
+
+void ContextGroup::clearBitstreamPos( )
+{
+    bitstreamPos.clear();
+}
+
+/*************************************************************
+ * planeset
+ *************************************************************/
 Planeset& ContextGroup::getPlaneset()
 {
     return cgImage;

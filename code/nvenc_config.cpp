@@ -108,3 +108,8 @@ void Config::processInput(int argc, char* argv[])
 	}
 }
 
+int Config::getNumTiles() const
+{
+    return numTileRows * numTileCols;
+}
+

@@ -5,8 +5,9 @@
 
 #include "context_group.h"
 
-struct Config
+class Config
 {
+public:
 	char* inputFilename;
 	char* outputFilename;
 	int width;
@@ -22,5 +23,7 @@ struct Config
     
     void processInput(int argc, char* argv[]);
     int* processTileBitrates( char* tileBitratesStr );
+
+    int getNumTiles() const;
 };
 
