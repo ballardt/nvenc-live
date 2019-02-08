@@ -94,6 +94,23 @@ void ContextGroup::createBitstream( Bitrate b, size_t sz )
     }
 }
 
+unsigned char ContextGroup::getBitstreamHere( Bitrate b )
+{
+    BMap::iterator it;
+    it = bitstreams.find( b );
+    if( it != bitstreams.end() )
+    {
+        unsigned char* stream = it->second;
+        long pos = getBitstreamPos( b );
+        return stream[pos];
+    }
+    else
+    {
+        std::cerr << "line " << __LINE__ << " (context_group.cpp): trying to get bitstream for bitrate " << b << " that does not exist - returning 0" << std::endl;
+        return 0;
+    }
+}
+
 unsigned char* ContextGroup::getBitstream( Bitrate b )
 {
     BMap::iterator it;
@@ -203,19 +220,9 @@ void ContextGroup::incBitstreamPos( Bitrate b, long sz )
     }
 }
 
-long ContextGroup::getBitstreamPos( Bitrate b ) const
+long ContextGroup::getBitstreamPos( Bitrate b )
 {
-    SMap::const_iterator it;
-    it = bitstreamPos.find( b );
-    if( it != bitstreamPos.end() )
-    {
-        return it->second;
-    }
-    else
-    {
-        std::cerr << "line " << __LINE__ << " (context_group.cpp): trying to get bitstreamPos for bitrate " << b << " that does not exist - returning 0" << std::endl;
-        return 0;
-    }
+    return getBitstreamPosRef(b);
 }
 
 long& ContextGroup::getBitstreamPosRef( Bitrate b )

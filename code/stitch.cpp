@@ -83,12 +83,9 @@ NALType getNALType(std::vector<Block>& nal)
  */
 int getNextNAL( std::shared_ptr<ContextGroup> group, Bitrate ifs_idx, std::vector<Block>* buf )
 {
-    unsigned char* bytes     = group->getBitstream( ifs_idx );
-    long&          bytesPos  = group->getBitstreamPosRef( ifs_idx );
-    long           bytesSize = group->getBitstreamSize( ifs_idx );
 #if 0
-    std::cerr << "Enter getNextNAL with " << bytesPos << std::endl;
-    unsigned char* p = bytes;
+    std::cerr << "Enter getNextNAL with " << group->getBitstreamPos( ifs_idx ) << std::endl;
+    unsigned char* p = group->getBitstream( ifs_idx );
     for( int i=0; i<10; i++ )
     {
         for( int j=0; j<10; j++ )
@@ -98,26 +95,26 @@ int getNextNAL( std::shared_ptr<ContextGroup> group, Bitrate ifs_idx, std::vecto
         std::cerr << std::endl;
     }
 #endif
-	if (bytesPos >= bytesSize) {
+	if (group->getBitstreamPos( ifs_idx ) >= group->getBitstreamSize( ifs_idx )) {
 		return -1;
 	}
 	// Go past the first border and consume it.
 	int zeroCounter = 0;
 	unsigned char c = 0xFF;
-	while ((zeroCounter < 2 || c != 0x01) && bytesPos < bytesSize) {
-		c = bytes[bytesPos];
+	while ((zeroCounter < 2 || c != 0x01) && group->getBitstreamPos( ifs_idx ) < group->getBitstreamSize( ifs_idx )) {
+		c = group->getBitstreamHere( ifs_idx );
 		buf->push_back(c);
-		bytesPos++;
+        group->incBitstreamPos( ifs_idx, 1 );
 		if (c == 0x00) {
 			zeroCounter++;
 		}
 	}
 	// Stop when we encounter the next border. Do not consume it.
 	zeroCounter = 0;
-	while ((zeroCounter < 2 || c != 0x01) && bytesPos < bytesSize) {
-		c = bytes[bytesPos];
+	while ((zeroCounter < 2 || c != 0x01) && group->getBitstreamPos( ifs_idx ) < group->getBitstreamSize( ifs_idx )) {
+		c = group->getBitstreamHere( ifs_idx );
 		buf->push_back(c);
-		bytesPos++;
+        group->incBitstreamPos( ifs_idx, 1 );
 		if (c == 0x00) {
 			zeroCounter++;
 		}
@@ -126,7 +123,7 @@ int getNextNAL( std::shared_ptr<ContextGroup> group, Bitrate ifs_idx, std::vecto
 		}
 	}
 	if (zeroCounter >= 2 && (unsigned char)c == 0x01) {
-		bytesPos -= 3;
+        group->incBitstreamPos( ifs_idx, -3 );
 		buf->pop_back();
 		buf->pop_back();
 		buf->pop_back();

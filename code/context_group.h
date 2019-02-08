@@ -34,6 +34,7 @@ public:
 
     void            createBitstream( Bitrate b, size_t sz );
     unsigned char*  getBitstream( Bitrate b );
+    unsigned char   getBitstreamHere( Bitrate b ); // return char at current bitstream_pos
     void            freeBitstreams( );
 
     void            setBitstreamSize( Bitrate b, long val );
@@ -43,7 +44,7 @@ public:
 
     void            setBitstreamPos( Bitrate b, long val );
     void            incBitstreamPos( Bitrate b, long val );
-    long            getBitstreamPos( Bitrate b ) const;
+    long            getBitstreamPos( Bitrate b );
     long&           getBitstreamPosRef( Bitrate b );
     void            clearBitstreamPos( );
 
