@@ -1,8 +1,10 @@
 #pragma once
 
 #include <map>
+// #include <memory>
 
 #include "nvenc_bitrates.h"
+#include "nvenc_planeset.h"
 
 struct AVCodecContext;
 
@@ -13,7 +15,10 @@ public:
 	int height; // INCLUDES the extra tile for groups which have it
 	int width;
 
+    PlaneSet* cgImage;
+
     ContextGroup( int n, int h, int w );
+    ~ContextGroup( );
 
     void            setContext( Bitrate b, AVCodecContext* ctx );
     AVCodecContext* getContext( Bitrate b );
@@ -28,6 +33,8 @@ public:
     void            incBitstreamSize( Bitrate b, long val );
     long            getBitstreamSize( Bitrate b ) const;
     void            clearBitstreamSizes( );
+
+    PlaneSet*       getPlanetSet();
 
 private:
     std::map<Bitrate,AVCodecContext*> contexts;

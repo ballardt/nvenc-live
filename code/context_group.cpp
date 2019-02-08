@@ -22,7 +22,14 @@ ContextGroup::ContextGroup( int n, int h, int w )
     : numTileCols(n)
     , height(h)
     , width(w)
-{ }
+{
+    cgImage = new PlaneSet( width, height );
+}
+
+ContextGroup::~ContextGroup( )
+{
+    delete cgImage;
+}
 
 void ContextGroup::setContext( Bitrate b, AVCodecContext* ctx )
 {
@@ -158,5 +165,10 @@ long ContextGroup::getBitstreamSize( Bitrate b ) const
 void ContextGroup::clearBitstreamSizes( )
 {
     bitstreamSizes.clear();
+}
+
+std::shared_ptr<PlaneSet> ContextGroup::getPlanetSet()
+{
+    return cgImage;
 }
 
