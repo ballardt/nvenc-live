@@ -195,8 +195,7 @@ void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width
 		// unsigned char* cgImageU = new unsigned char[imageSize/4];
 		// unsigned char* cgImageV = new unsigned char[imageSize/4];
 
-        // PlaneSet cgImage( config.contextGroups[i]->width, config.contextGroups[i]->height );
-        PlaneSet* cgImage = config.contextGroups[i]->getPlaneSet( );
+        Planeset& cgImage = config.contextGroups[i]->getPlaneset( );
 
 #if 1
         if( width > config.contextGroups[i]->width )
@@ -212,22 +211,22 @@ void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width
 #endif
 		// Get the first tile if this is a subsequent group
 		if (i > 0) {
-			memcpy(cgImage->y, y, width*tileHeight);
-			memcpy(cgImage->u, u, (width*tileHeight)/4);
-			memcpy(cgImage->v, v, (width*tileHeight)/4);
+			memcpy(cgImage.y, y, width*tileHeight);
+			memcpy(cgImage.u, u, (width*tileHeight)/4);
+			memcpy(cgImage.v, v, (width*tileHeight)/4);
 			yOffset = width*tileHeight;
 			uvOffset = (width*tileHeight)/4;
 		}
 		// Get the rest of the tiles
 		int yCpySize = width * tileHeight * config.numTileRows * config.contextGroups[i]->numTileCols;
 		int uvCpySize = yCpySize / 4;
-		memcpy(cgImage->y+yOffset, y+(currTile*width*tileHeight), yCpySize);
-		memcpy(cgImage->u+uvOffset, u+(currTile*width*tileHeight/4), uvCpySize);
-		memcpy(cgImage->v+uvOffset, v+(currTile*width*tileHeight/4), uvCpySize);
+		memcpy(cgImage.y+yOffset, y+(currTile*width*tileHeight), yCpySize);
+		memcpy(cgImage.u+uvOffset, u+(currTile*width*tileHeight/4), uvCpySize);
+		memcpy(cgImage.v+uvOffset, v+(currTile*width*tileHeight/4), uvCpySize);
 		currTile += config.numTileRows * config.contextGroups[i]->numTileCols;
 
 		// Now put it in the frame and encode it
-		hw.putImageInFrame(cgImage->y, cgImage->u, cgImage->v, width, config.contextGroups[i]->height);
+		hw.putImageInFrame(cgImage.y, cgImage.u, cgImage.v, width, config.contextGroups[i]->height);
 
         config.contextGroups[i]->setBitstreamSize(
             HIGH_BITRATE,
@@ -330,7 +329,7 @@ int main(int argc, char* argv[])
     {
 		// config.height = paddedHeight;
         for( auto group : config.contextGroups )
-            group.clearBitstreamSizes();
+            group->clearBitstreamSizes();
 
 		rearrangeFrame( &inputFrame, &outputFrame, config.width, paddedHeight );
 		encodeFrame( outputFrame.y,

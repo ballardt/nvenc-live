@@ -11,11 +11,10 @@ struct AVCodecContext;
 class ContextGroup
 {
 public:
-	int numTileCols;
-	int height; // INCLUDES the extra tile for groups which have it
-	int width;
-
-    PlaneSet* cgImage;
+	int      numTileCols;
+	int      height; // INCLUDES the extra tile for groups which have it
+	int      width;
+    Planeset cgImage;
 
     ContextGroup( int n, int h, int w );
     ~ContextGroup( );
@@ -34,7 +33,7 @@ public:
     long            getBitstreamSize( Bitrate b ) const;
     void            clearBitstreamSizes( );
 
-    PlaneSet*       getPlanetSet();
+    Planeset&       getPlaneset();
 
 private:
     std::map<Bitrate,AVCodecContext*> contexts;

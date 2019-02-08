@@ -22,13 +22,12 @@ ContextGroup::ContextGroup( int n, int h, int w )
     : numTileCols(n)
     , height(h)
     , width(w)
+    , cgImage( w, h )
 {
-    cgImage = new PlaneSet( width, height );
 }
 
 ContextGroup::~ContextGroup( )
 {
-    delete cgImage;
 }
 
 void ContextGroup::setContext( Bitrate b, AVCodecContext* ctx )
@@ -149,7 +148,7 @@ void ContextGroup::incBitstreamSize( Bitrate b, long sz )
 
 long ContextGroup::getBitstreamSize( Bitrate b ) const
 {
-    SMap::iterator it;
+    SMap::const_iterator it;
     it = bitstreamSizes.find( b );
     if( it != bitstreamSizes.end() )
     {
@@ -167,7 +166,7 @@ void ContextGroup::clearBitstreamSizes( )
     bitstreamSizes.clear();
 }
 
-std::shared_ptr<PlaneSet> ContextGroup::getPlanetSet()
+Planeset& ContextGroup::getPlaneset()
 {
     return cgImage;
 }
