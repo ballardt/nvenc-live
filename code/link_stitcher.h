@@ -7,7 +7,7 @@
 
 int doStitching( unsigned char* tiledBitstream,
                  int            numQualityLevels,
-                 std::vector<std::vector<long> >& bitstream_Size,
+                 // std::vector<std::vector<long> >& bitstream_Size,
                  int*           tileBitrates,
                  int            finalWidth,
                  int            finalHeight,

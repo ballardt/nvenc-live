@@ -479,7 +479,6 @@ void modifyPSlice(std::vector<Block>* nal, bool isFirstSlice, int ctuOffset, int
 
 int doStitching( unsigned char* tiledBitstream,
                  int            numQualityLevels,
-                 vector<vector<long> >& bitstream_Size,
 				 int*           tileBitrates,
                  int            finalWidth,
                  int            finalHeight,
@@ -555,7 +554,7 @@ int doStitching( unsigned char* tiledBitstream,
                                     contextGroups[cg_idx]->getBitstream( (Bitrate)ifs_idx ),
                                     &nal,
                                     &bitstream_Pos[ifs_idx][cg_idx],
-                                    bitstream_Size[ifs_idx][cg_idx] );
+                                    contextGroups[cg_idx]->getBitstreamSize( (Bitrate)ifs_idx ) );
 					switch (nalType) {
 						case P_SLICE:
                             // std::cerr << "line " << __LINE__ << " case P_SLICE, i is " << i << std::endl;

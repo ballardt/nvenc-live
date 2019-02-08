@@ -296,7 +296,6 @@ int main(int argc, char* argv[])
 	numTiles = config.numTileRows * config.numTileCols;
 	int ySize = config.width * config.height;
 	int uvSize = ySize / 4;
-	vector<vector<long> > bitstreamSizes(2); // 1st dimension is quality, 2nd is contextGroup
 	int tiledBitstreamSize;
 
 	Planeset inputFrame( config.width, config.height );
@@ -312,16 +311,17 @@ int main(int argc, char* argv[])
 	while (getNextFrame(inFile, &inputFrame, ySize))
     {
 		// config.height = paddedHeight;
-		bitstreamSizes[HIGH_BITRATE].clear();
-		bitstreamSizes[LOW_BITRATE].clear();
+        for( auto group : config.contextGroups )
+            group.clearBitstreamSizes();
 
 		rearrangeFrame( &inputFrame, &outputFrame, config.width, paddedHeight );
-		encodeFrame(outputFrame.y, outputFrame.u, outputFrame.v,
-		            config.width/NUM_SPLITS, paddedHeight*NUM_SPLITS, bitstreamSizes);
+		encodeFrame( outputFrame.y,
+                     outputFrame.u,
+                     outputFrame.v,
+                     config.width/NUM_SPLITS,
+                     paddedHeight*NUM_SPLITS );
 		tiledBitstreamSize = doStitching(tiledBitstream,
                                          2,
-                                         // bitstreams,
-                                         bitstreamSizes,
                                          config.tileBitrates,
 										 config.width,
                                          paddedHeight,

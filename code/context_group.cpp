@@ -155,3 +155,8 @@ long ContextGroup::getBitstreamSize( Bitrate b ) const
     }
 }
 
+void ContextGroup::clearBitstreamSizes( )
+{
+    bitstreamSizes.clear();
+}
+

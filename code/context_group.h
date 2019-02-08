@@ -27,6 +27,7 @@ public:
     void            setBitstreamSize( Bitrate b, long val );
     void            incBitstreamSize( Bitrate b, long val );
     long            getBitstreamSize( Bitrate b ) const;
+    void            clearBitstreamSizes( );
 
 private:
     std::map<Bitrate,AVCodecContext*> contexts;
