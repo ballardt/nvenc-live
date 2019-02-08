@@ -157,8 +157,7 @@ int sendFrameToNVENC(Bitrate bitrate, int contextGroupIdx)
 /**
  * Encode a frame twice, once at a high bitrate and once at a low one.
  */
-void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width,
-				 int height, vector<vector<long> > &bitstreamSizes)
+void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width, int height )
 {
     static bool first_time = true;
     if( first_time )
@@ -212,8 +211,12 @@ void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width
 		currTile += config.numTileRows * config.contextGroups[i]->numTileCols;
 		// Now put it in the frame and encode it
 		hw.putImageInFrame(cgImageY, cgImageU, cgImageV, width, config.contextGroups[i]->height);
-		bitstreamSizes[HIGH_BITRATE].push_back( sendFrameToNVENC( HIGH_BITRATE, i ) );
-		bitstreamSizes[LOW_BITRATE] .push_back( sendFrameToNVENC( LOW_BITRATE,  i ) );
+        config.contextGroups[i]->setBitstreamSize(
+            HIGH_BITRATE,
+            sendFrameToNVENC( HIGH_BITRATE, i ) );
+        config.contextGroups[i]->setBitstreamSize(
+            LOW_BITRATE,
+            sendFrameToNVENC( LOW_BITRATE,  i ) );
 		delete [] cgImageY;
 		delete [] cgImageU;
 		delete [] cgImageV;

@@ -24,6 +24,10 @@ public:
     unsigned char*  getBitstream( Bitrate b );
     void            freeBitstreams( );
 
+    void            setBitstreamSize( Bitrate b, long val );
+    void            incBitstreamSize( Bitrate b, long val );
+    long            getBitstreamSize( Bitrate b ) const;
+
 private:
     std::map<Bitrate,AVCodecContext*> contexts;
 
@@ -34,5 +38,10 @@ private:
 
     typedef std::map <Bitrate,unsigned char*> BMap;
     typedef std::pair<Bitrate,unsigned char*> BPair;
+
+    std::map<Bitrate,long> bitstreamSizes;
+
+    typedef std::map <Bitrate,long> SMap;
+    typedef std::pair<Bitrate,long> SPair;
 };
 

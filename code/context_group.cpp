@@ -112,3 +112,46 @@ void ContextGroup::freeBitstreams( )
     bitstreams.clear();
 }
 
+void ContextGroup::setBitstreamSize( Bitrate b, long sz )
+{
+    SMap::iterator it;
+    it = bitstreamSizes.find( b );
+    if( it == bitstreamSizes.end() )
+    {
+        bitstreamSizes.insert( SPair( b, sz ) );
+    }
+    else
+    {
+        it->second = sz;
+    }
+}
+
+void ContextGroup::incBitstreamSize( Bitrate b, long sz )
+{
+    SMap::iterator it;
+    it = bitstreamSizes.find( b );
+    if( it == bitstreamSizes.end() )
+    {
+        bitstreamSizes.insert( SPair( b, sz ) );
+    }
+    else
+    {
+        it->second += sz;
+    }
+}
+
+long ContextGroup::getBitstreamSize( Bitrate b ) const
+{
+    SMap::iterator it;
+    it = bitstreamSizes.find( b );
+    if( it != bitstreamSizes.end() )
+    {
+        return it->second;
+    }
+    else
+    {
+        std::cerr << "line " << __LINE__ << " (context_group.cpp): trying to get bitstreamSize for bitrate " << b << " that does not exist - returning 0" << std::endl;
+        return 0;
+    }
+}
+
