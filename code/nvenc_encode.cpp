@@ -185,41 +185,46 @@ void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width
 	// For each encode group, put that image in the frame then encode it
 	int currTile = 0;
 	int tileHeight = height / (config.numTileRows * config.numTileCols);
-	for (int i=0; i<(config.contextGroups).size(); i++) {
+	for (int i=0; i<config.contextGroups.size(); i++) {
 		// First, get the image for this encode group
 		// TODO replace with Planeset. Probably put in a different function entirely when have time.
-		int imageSize = config.contextGroups[i]->width * config.contextGroups[i]->height;
 		int yOffset = 0;
 		int uvOffset = 0;
-		unsigned char* cgImageY = new unsigned char[imageSize];
-		unsigned char* cgImageU = new unsigned char[imageSize/4];
-		unsigned char* cgImageV = new unsigned char[imageSize/4];
+		// int imageSize = config.contextGroups[i]->width * config.contextGroups[i]->height;
+		// unsigned char* cgImageY = new unsigned char[imageSize];
+		// unsigned char* cgImageU = new unsigned char[imageSize/4];
+		// unsigned char* cgImageV = new unsigned char[imageSize/4];
+
+        PlaneSet cgImage( config.contextGroups[i]->width, config.contextGroups[i]->height );
+
 		// Get the first tile if this is a subsequent group
 		if (i > 0) {
-			memcpy(cgImageY, y, width*tileHeight);
-			memcpy(cgImageU, u, (width*tileHeight)/4);
-			memcpy(cgImageV, v, (width*tileHeight)/4);
+			memcpy(cgImage.y, y, width*tileHeight);
+			memcpy(cgImage.u, u, (width*tileHeight)/4);
+			memcpy(cgImage.v, v, (width*tileHeight)/4);
 			yOffset = width*tileHeight;
 			uvOffset = (width*tileHeight)/4;
 		}
 		// Get the rest of the tiles
 		int yCpySize = width * tileHeight * config.numTileRows * config.contextGroups[i]->numTileCols;
 		int uvCpySize = yCpySize / 4;
-		memcpy(cgImageY+yOffset, y+(currTile*width*tileHeight), yCpySize);
-		memcpy(cgImageU+uvOffset, u+(currTile*width*tileHeight/4), uvCpySize);
-		memcpy(cgImageV+uvOffset, v+(currTile*width*tileHeight/4), uvCpySize);
+		memcpy(cgImage.y+yOffset, y+(currTile*width*tileHeight), yCpySize);
+		memcpy(cgImage.u+uvOffset, u+(currTile*width*tileHeight/4), uvCpySize);
+		memcpy(cgImage.v+uvOffset, v+(currTile*width*tileHeight/4), uvCpySize);
 		currTile += config.numTileRows * config.contextGroups[i]->numTileCols;
+
 		// Now put it in the frame and encode it
-		hw.putImageInFrame(cgImageY, cgImageU, cgImageV, width, config.contextGroups[i]->height);
+		hw.putImageInFrame(cgImage.y, cgImage.u, cgImage.v, width, config.contextGroups[i]->height);
+
         config.contextGroups[i]->setBitstreamSize(
             HIGH_BITRATE,
             sendFrameToNVENC( HIGH_BITRATE, i ) );
         config.contextGroups[i]->setBitstreamSize(
             LOW_BITRATE,
             sendFrameToNVENC( LOW_BITRATE,  i ) );
-		delete [] cgImageY;
-		delete [] cgImageU;
-		delete [] cgImageV;
+		// delete [] cgImageY;
+		// delete [] cgImageU;
+		// delete [] cgImageV;
 	}
 }
 
