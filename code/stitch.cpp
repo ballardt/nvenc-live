@@ -81,7 +81,7 @@ NALType getNALType(std::vector<Block>& nal) {
 int getNextNAL(unsigned char* bytes, std::vector<Block>* buf, long* bytesPos, long bytesSize)
 {
 #if 0
-    std::cerr << "Enter getNextNAL with " << *bytesPos << std::endl;
+    //std::cerr << "Enter getNextNAL with " << *bytesPos << std::endl;
     unsigned char* p = bytes;
     for( int i=0; i<10; i++ )
     {
@@ -520,6 +520,8 @@ int doStitching( unsigned char* tiledBitstream,
 	int  nalType;
 	int  ifs_idx = -1;
 
+	//std::cout << numTileCols << ", rows: " << numTileRows << std::endl;
+
 	int  iBase = 0;
 	while (true)
     {
@@ -536,28 +538,32 @@ int doStitching( unsigned char* tiledBitstream,
 			{
                 if( i >= (int)sliceSegAddrs.size() )
                 {
-                    std::cerr << "line " << __LINE__ << " index i (" << i << ") is >= than number of tiles (" << numTiles << ")" << std::endl;
+                    // std::cerr << "line " << __LINE__ << " index i (" << i << ") is >= than number of tiles (" << numTiles << ")" << std::endl;
                 }
 
 				for (int ifs_idx=0; ifs_idx<numQualityLevels; ifs_idx++)
 				{
+					//std::cerr << std::endl << "-------------------------------------" << std::endl << std::endl;
+					//std::cerr << "cg_idx: " << cg_idx << ", ifs_idx: " << ifs_idx << std::endl;
 					if (cg_idx > 0 && i == -1) {
 						i = iBase;
 					}
-					nalType = getNextNAL( bitstreams[ifs_idx][cg_idx],
+					//std::cout << std::endl;
+					nalType = getNextNAL(bitstreams[ifs_idx][cg_idx],
 										&nal,
 										&bitstream_Pos[ifs_idx][cg_idx],
 										bitstream_Size[ifs_idx][cg_idx] );
+					//std::cout << "i: " << i << std::endl;
 					switch (nalType) {
 						case P_SLICE:
-                            std::cerr << "line " << __LINE__ << " case P_SLICE, i is " << i << std::endl;
-                            if( i >= (int)sliceSegAddrs.size() )
+                            if( i == (int)sliceSegAddrs.size() )
                             {
-                                std::cerr << "line " << __LINE__ << " index i (" << i << ") is >= than number of tiles (" << numTiles << ")" << std::endl;
+                                // std::cerr << "line " << __LINE__ << " index i (" << i << ") is >= than number of tiles (" << numTiles << ")" << std::endl;
                                 exit( -1 );
                             }
 
-							if (tileBitrates[i] == ifs_idx) {
+							if (cg_idx > 0 && tileBitrates[i] == ifs_idx) {
+								//std::cerr << "line " << __LINE__ << " case P_SLICE, i is " << i << std::endl;
 								modifyPSlice(&nal, (i==0), sliceSegAddrs[i], oldCtuOffsetBitSize,
 											newCtuOffsetBitSize);
 								std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
@@ -566,21 +572,21 @@ int doStitching( unsigned char* tiledBitstream,
 							if (ifs_idx == numQualityLevels-1)
                             {
                                 i++;
-                                std::cerr << "line " << __LINE__ << " index i is " << i << std::endl;
+                                // std::cerr << "line " << __LINE__ << " index i is " << i << std::endl;
                             }
 							break;
 						case I_SLICE:
-                            std::cerr << "line " << __LINE__ << " case I_SLICE, i is " << i
-                                      << " ifs_idx=" << ifs_idx
-                                      << " cg_idx=" << cg_idx
-                                      << std::endl;
                             if( i >= (int)sliceSegAddrs.size() )
                             {
-                                std::cerr << "line " << __LINE__ << " index i (" << i << ") is >= than number of tiles (" << numTiles << ")" << std::endl;
+                                //std::cerr << "line " << __LINE__ << " index i (" << i << ") is >= than number of tiles (" << numTiles << ")" << std::endl;
                                 exit( -1 );
                             }
 
-							if (tileBitrates[i] == ifs_idx) {
+							if (cg_idx > 0 && tileBitrates[i] == ifs_idx) {
+								//std::cerr << "line " << __LINE__ << " case I_SLICE, i is " << i << " ifs_idx=" << ifs_idx << " cg_idx=" << cg_idx << std::endl;
+								if (cg_idx > 0) {
+									std::cerr << "2nd cg, i: " << i << std::endl;
+								}
 								modifyISlice(&nal, (i==0), sliceSegAddrs[i], oldCtuOffsetBitSize,
 											newCtuOffsetBitSize);
 								std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
@@ -590,26 +596,26 @@ int doStitching( unsigned char* tiledBitstream,
 							if (ifs_idx == numQualityLevels-1)
                             {
                                 i++;
-                                std::cerr << "line " << __LINE__ << " index i is " << i << std::endl;
+                                // std::cerr << "line " << __LINE__ << " index i is " << i << std::endl;
                             }
 							break;
 						case SPS:
-							if (ifs_idx==0) {
+							if (ifs_idx==0 && cg_idx==0) {
 								modifySPS(&nal, finalWidth, finalHeight);
 								std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
 								totalSize += nal.size();
 							}
 							break;
 						case PPS:
-							if (ifs_idx==0) {
+							if (ifs_idx==0 && cg_idx==0) {
 								modifyPPS(&nal, numTileCols, numTileRows);
 								std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
 								totalSize += nal.size();
 							}
 							break;
 						case VPS:
-                            std::cerr << "line " << __LINE__ << " case VPS, i is " << i << std::endl;
-							if (ifs_idx==0) {
+                            // std::cerr << "line " << __LINE__ << " case VPS, i is " << i << std::endl;
+							if (ifs_idx==0 && cg_idx==0) {
 								std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
 								totalSize += nal.size();
 							}
@@ -619,8 +625,9 @@ int doStitching( unsigned char* tiledBitstream,
 							//if (ifs_idx == numQualityLevels-1) i = 0;
 							break;
 						case SEI:
-                            std::cerr << "line " << __LINE__ << " case SEI, i is " << i << std::endl;
-							if (ifs_idx==0) {
+							if (ifs_idx==numQualityLevels-1 && cg_idx==contextGroups.size()-1) {
+								//std::cout << "Printing SEI" << std::endl;
+								//std::cerr << "line " << __LINE__ << " case SEI, i is " << i << ", ifs_idx is " << ifs_idx << ", cg_idx is " << cg_idx << std::endl;
 								std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
 								totalSize += nal.size();
 							}
@@ -630,10 +637,9 @@ int doStitching( unsigned char* tiledBitstream,
 							//if (ifs_idx == numQualityLevels-1) i = 0;
 							break;
 						case OTHER:
-                            std::cerr << "line " << __LINE__ << " case OTHER, i is " << i << std::endl;
 							break;
 						case -1:
-                            std::cerr << "line " << __LINE__ << " case -1, i is " << i << std::endl;
+                            //std::cerr << "line " << __LINE__ << " case -1, i is " << i << std::endl;
 							if (ifs_idx == numQualityLevels-1 && cg_idx == contextGroups.size()-1) {
 								goto done;
 							}

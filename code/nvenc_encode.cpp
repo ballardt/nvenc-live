@@ -65,8 +65,6 @@ struct Config
 	std::vector<ContextGroup> contextGroups;
 };
 
-int numTiles; // Should we pass instead? Makes sense to be global, but kind of sloppy
-
 Config* config = 0;
 
 struct Planeset
@@ -189,7 +187,7 @@ static enum AVPixelFormat getHwFormat(AVCodecContext *ctx, const enum AVPixelFor
  * Initialize a context object for a given bitrate. This should occur after the hardware 
  * initialization.
  */
-void initializeContext(Bitrate bitrate, int width, int height)
+void initializeContext(Bitrate bitrate, int width, int height, int numTiles)
 {
 	// Allocate codec context. This is the struct with all of the parameters that
 	// will be used when running the encoder, like bit rate, width/height, and GOP
@@ -342,8 +340,9 @@ void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width
 		// For each context group
         std::cerr << __LINE__ << " context group size: " << config->contextGroups.size() << std::endl;
 		for (int i=0; i<config->contextGroups.size(); i++) {
-			initializeContext(HIGH_BITRATE, width, (config->contextGroups[i]).height);
-			initializeContext(LOW_BITRATE, width, (config->contextGroups[i]).height);
+			int numTiles = config->contextGroups[i].numTileCols * config->numTileRows;
+			initializeContext(HIGH_BITRATE, width, (config->contextGroups[i]).height, numTiles);
+			initializeContext(LOW_BITRATE, width, (config->contextGroups[i]).height, numTiles);
 		}
 	}
 	// For each encode group, put that image in the frame then encode it
@@ -526,7 +525,7 @@ int main(int argc, char* argv[])
 	}
 	bitrateValues[HIGH_BITRATE]        = config->highBitrate;
 	bitrateValues[LOW_BITRATE]         = config->lowBitrate;
-	numTiles = config->numTileRows * config->numTileCols;
+	int numTiles = config->numTileRows * config->numTileCols;
 	int ySize = config->width * config->height;
 	int uvSize = ySize / 4;
 	vector<vector<long> > bitstreamSizes(2); // 1st dimension is quality, 2nd is contextGroup
@@ -542,6 +541,10 @@ int main(int argc, char* argv[])
 	tiledBitstream = (unsigned char*)malloc(sizeof(unsigned char) * BITSTREAM_SIZE);
 
 	// The main loop. Get a frame, rearrange it, send it to NVENC, stitch it, then write it out.
+	
+	FILE* raw_high = fopen("raw_high.hevc", "wb");
+	int cg = 1;
+	int i = 0;
 	while (getNextFrame(inFile, &inputFrame, ySize))
     {
 		// config->height = paddedHeight;
@@ -551,6 +554,9 @@ int main(int argc, char* argv[])
 		rearrangeFrame( &inputFrame, &outputFrame, config->width, paddedHeight );
 		encodeFrame(outputFrame.y, outputFrame.u, outputFrame.v,
 		            config->width/NUM_SPLITS, paddedHeight*NUM_SPLITS, bitstreamSizes);
+		// For debug purposes
+		fwrite(bitstreams[HIGH_BITRATE][cg], sizeof(unsigned char), bitstreamSizes[HIGH_BITRATE][cg], raw_high);
+		// End of for debug purposes
 		tiledBitstreamSize = doStitching(tiledBitstream,
                                          2,
                                          bitstreams,
@@ -563,6 +569,8 @@ int main(int argc, char* argv[])
 										 config->contextGroups);
 		fwrite(tiledBitstream, sizeof(unsigned char), tiledBitstreamSize, outFile);
 		// config->height = origHeight;
+		if (i == 3) break;
+		i++;
 	}
 
 	// Wrap up
