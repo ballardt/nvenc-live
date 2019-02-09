@@ -8,6 +8,17 @@
 
 struct AVCodecContext;
 
+struct Context
+{
+    AVCodecContext* ctx;
+    unsigned char*  stream;
+    long            size;
+    long            pos;
+
+    Context();
+    ~Context();
+};
+
 class ContextGroup
 {
     bool     _valid;
@@ -24,18 +35,18 @@ public:
 
     inline bool valid() const { return _valid; }
 
-    inline int  getHeight() const { return height; }
-    inline int  getWidth()  const { return width; }
+    void            release( );
+
+    void            setBufferSize( size_t val );
+
+    inline int      getHeight() const { return height; }
+    inline int      getWidth()  const { return width; }
 
     void            setContext( Bitrate b, AVCodecContext* ctx );
     AVCodecContext* getContext( Bitrate b );
-    void            freeContexts( );
-    bool            hasContexts( ) const;
 
-    void            createBitstream( Bitrate b, size_t sz );
     unsigned char*  getBitstream( Bitrate b );
     unsigned char   getBitstreamHere( Bitrate b ); // return char at current bitstream_pos
-    void            freeBitstreams( );
 
     void            setBitstreamSize( Bitrate b, long val );
     void            incBitstreamSize( Bitrate b, long val );
@@ -45,26 +56,15 @@ public:
     void            setBitstreamPos( Bitrate b, long val );
     void            incBitstreamPos( Bitrate b, long val );
     long            getBitstreamPos( Bitrate b );
-    long&           getBitstreamPosRef( Bitrate b );
     void            clearBitstreamPos( );
 
     Planeset&       getPlaneset();
 
 private:
-    std::map<Bitrate,AVCodecContext*> contexts;
+    typedef std::map <Bitrate,Context*> Map;
+    typedef std::pair<Bitrate,Context*> Pair;
 
-    typedef std::map <Bitrate,AVCodecContext*> Map;
-    typedef std::pair<Bitrate,AVCodecContext*> Pair;
-
-    std::map<Bitrate,unsigned char*> bitstreams;
-
-    typedef std::map <Bitrate,unsigned char*> BMap;
-    typedef std::pair<Bitrate,unsigned char*> BPair;
-
-    std::map<Bitrate,long> bitstreamSizes;
-    std::map<Bitrate,long> bitstreamPos;
-
-    typedef std::map <Bitrate,long> SMap;
-    typedef std::pair<Bitrate,long> SPair;
+    size_t _bitstreamSize;
+    Map    _ctx;
 };
 

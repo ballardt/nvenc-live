@@ -316,8 +316,7 @@ int main(int argc, char* argv[])
 	Planeset outputFrame( config.width/NUM_SPLITS, paddedHeight*NUM_SPLITS );
 
 	for (int i=0; i<numContextGroups; i++) {
-        config.contextGroups[i]->createBitstream( HIGH_BITRATE, BITSTREAM_SIZE );
-        config.contextGroups[i]->createBitstream( LOW_BITRATE,  BITSTREAM_SIZE );
+        config.contextGroups[i]->setBufferSize( BITSTREAM_SIZE );
 	}
 	tiledBitstream = (unsigned char*)malloc(sizeof(unsigned char) * BITSTREAM_SIZE);
 
@@ -351,9 +350,11 @@ int main(int argc, char* argv[])
 	for (int i=0; i<numContextGroups; i++) {
 		sendFrameToNVENC( HIGH_BITRATE, i );
 		sendFrameToNVENC( LOW_BITRATE, i );
-        config.contextGroups[i]->freeContexts();
-        config.contextGroups[i]->freeBitstreams();
 	}
+
+    for( auto group : config.contextGroups )
+        group->release();
+
 	free(tiledBitstream);
 	fclose(inFile);
 	fclose(outFile);

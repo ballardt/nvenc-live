@@ -6,23 +6,29 @@ extern "C"
 {
 #include "libavutil/common.h"
 #include "libavcodec/avcodec.h"
-// #include "libavdevice/avdevice.h"
-// #include "libavfilter/avfilter.h"
-// #include "libavformat/avformat.h"
-// #include "libswresample/swresample.h"
-// #include "libavutil/avutil.h"
-// #include "libavutil/hwcontext.h"
-// #include "libswscale/swscale.h"
-// #include "libpostproc/postprocess.h"
 };
 
 #include "context_group.h"
+
+Context::Context( )
+    : ctx( 0 )
+    , stream( 0 )
+    , size( 0 )
+    , pos( 0 )
+{ }
+
+Context::~Context( )
+{
+    avcodec_free_context( &ctx );
+    delete [] stream;
+}
 
 ContextGroup::ContextGroup( int n, int h, int w )
     : _valid( true )
     , numTileCols(n)
     , height(h)
     , width(w)
+    , _bitstreamSize( 0 )
     , cgImage( w, h )
 {
     std::cerr << "line " << __LINE__ << " (context_group.cpp): creating a context group with width " << w << " and height " << h << std::endl;
@@ -30,16 +36,31 @@ ContextGroup::ContextGroup( int n, int h, int w )
 
 ContextGroup::~ContextGroup( )
 {
+    release();
     _valid = false;
+}
+
+void ContextGroup::release( )
+{
+    for( auto c : _ctx ) delete c.second;
+    _ctx.clear();
+}
+
+void ContextGroup::setBufferSize( size_t sz )
+{
+    _bitstreamSize = sz;
 }
 
 void ContextGroup::setContext( Bitrate b, AVCodecContext* ctx )
 {
     Map::iterator it;
-    it = contexts.find( b );
-    if( it == contexts.end() )
+    it = _ctx.find( b );
+    if( it == _ctx.end() )
     {
-        contexts.insert( Pair( b, ctx ) );
+        Context* c = new Context;
+        c->ctx = ctx;
+        c->stream = new unsigned char[_bitstreamSize];
+        _ctx.insert( Pair( b, c ) );
     }
     else
     {
@@ -51,10 +72,10 @@ void ContextGroup::setContext( Bitrate b, AVCodecContext* ctx )
 AVCodecContext* ContextGroup::getContext( Bitrate b )
 {
     Map::iterator it;
-    it = contexts.find( b );
-    if( it != contexts.end() )
+    it = _ctx.find( b );
+    if( it != _ctx.end() )
     {
-        return it->second;
+        return it->second->ctx;
     }
     else
     {
@@ -63,45 +84,14 @@ AVCodecContext* ContextGroup::getContext( Bitrate b )
     }
 }
 
-bool ContextGroup::hasContexts( ) const
-{
-    return ( contexts.empty() == false );
-}
-
-void ContextGroup::freeContexts( )
-{
-    Map::iterator it  = contexts.begin();
-    Map::iterator end = contexts.end();
-    while( it != end )
-    {
-        avcodec_free_context( &it->second );
-        it++;
-    }
-    contexts.clear();
-}
-
-void ContextGroup::createBitstream( Bitrate b, size_t sz )
-{
-    BMap::iterator it;
-    it = bitstreams.find( b );
-    if( it == bitstreams.end() )
-    {
-        bitstreams.insert( BPair( b, new unsigned char[sz] ) );
-    }
-    else
-    {
-        std::cerr << "line " << __LINE__ << " (context_group.cpp): trying to insert bitstream twice for the same bitrate " << b << " - ignoring" << std::endl;
-    }
-}
-
 unsigned char ContextGroup::getBitstreamHere( Bitrate b )
 {
-    BMap::iterator it;
-    it = bitstreams.find( b );
-    if( it != bitstreams.end() )
+    Map::iterator it;
+    it = _ctx.find( b );
+    if( it != _ctx.end() )
     {
-        unsigned char* stream = it->second;
-        long pos = getBitstreamPos( b );
+        unsigned char* stream = it->second->stream;
+        long           pos    = it->second->pos;
         return stream[pos];
     }
     else
@@ -113,11 +103,11 @@ unsigned char ContextGroup::getBitstreamHere( Bitrate b )
 
 unsigned char* ContextGroup::getBitstream( Bitrate b )
 {
-    BMap::iterator it;
-    it = bitstreams.find( b );
-    if( it != bitstreams.end() )
+    Map::iterator it;
+    it = _ctx.find( b );
+    if( it != _ctx.end() )
     {
-        return it->second;
+        return it->second->stream;
     }
     else
     {
@@ -126,67 +116,58 @@ unsigned char* ContextGroup::getBitstream( Bitrate b )
     }
 }
 
-void ContextGroup::freeBitstreams( )
-{
-    BMap::iterator it  = bitstreams.begin();
-    BMap::iterator end = bitstreams.end();
-    while( it != end )
-    {
-        delete [] it->second;
-        it++;
-    }
-    bitstreams.clear();
-}
-
 /*************************************************************
  * bitstream sizes
  *************************************************************/
 void ContextGroup::setBitstreamSize( Bitrate b, long sz )
 {
-    SMap::iterator it;
-    it = bitstreamSizes.find( b );
-    if( it == bitstreamSizes.end() )
+    Map::iterator it;
+    it = _ctx.find( b );
+    if( it != _ctx.end() )
     {
-        bitstreamSizes.insert( SPair( b, sz ) );
+        it->second->size = sz;
     }
     else
     {
-        it->second = sz;
+        std::cerr << "line " << __LINE__ << " (context_group.cpp): trying to set size on non-existent context - ignoring" << std::endl;
     }
 }
 
 void ContextGroup::incBitstreamSize( Bitrate b, long sz )
 {
-    SMap::iterator it;
-    it = bitstreamSizes.find( b );
-    if( it == bitstreamSizes.end() )
+    Map::iterator it;
+    it = _ctx.find( b );
+    if( it != _ctx.end() )
     {
-        bitstreamSizes.insert( SPair( b, sz ) );
+        it->second->size += sz;
     }
     else
     {
-        it->second += sz;
+        std::cerr << "line " << __LINE__ << " (context_group.cpp): trying to increase size on non-existent context - ignoring" << std::endl;
     }
 }
 
 long ContextGroup::getBitstreamSize( Bitrate b ) const
 {
-    SMap::const_iterator it;
-    it = bitstreamSizes.find( b );
-    if( it != bitstreamSizes.end() )
+    Map::const_iterator it;
+    it = _ctx.find( b );
+    if( it != _ctx.end() )
     {
-        return it->second;
+        return it->second->size;
     }
     else
     {
-        std::cerr << "line " << __LINE__ << " (context_group.cpp): trying to get bitstreamSize for bitrate " << b << " that does not exist - returning 0" << std::endl;
+        std::cerr << "line " << __LINE__ << " (context_group.cpp): trying to read size from non-existent context - ignoring" << std::endl;
         return 0;
     }
 }
 
 void ContextGroup::clearBitstreamSizes( )
 {
-    bitstreamSizes.clear();
+    for( auto c : _ctx )
+    {
+        c.second->size = 0;
+    }
 }
 
 /*************************************************************
@@ -194,56 +175,53 @@ void ContextGroup::clearBitstreamSizes( )
  *************************************************************/
 void ContextGroup::setBitstreamPos( Bitrate b, long sz )
 {
-    SMap::iterator it;
-    it = bitstreamPos.find( b );
-    if( it == bitstreamPos.end() )
+    Map::iterator it;
+    it = _ctx.find( b );
+    if( it != _ctx.end() )
     {
-        bitstreamPos.insert( SPair( b, sz ) );
+        it->second->pos = sz;
     }
     else
     {
-        it->second = sz;
+        std::cerr << "line " << __LINE__ << " (context_group.cpp): trying to set pos on non-existent context - ignoring" << std::endl;
     }
 }
 
 void ContextGroup::incBitstreamPos( Bitrate b, long sz )
 {
-    SMap::iterator it;
-    it = bitstreamPos.find( b );
-    if( it == bitstreamPos.end() )
+    Map::iterator it;
+    it = _ctx.find( b );
+    if( it != _ctx.end() )
     {
-        bitstreamPos.insert( SPair( b, sz ) );
+        it->second->pos += sz;
     }
     else
     {
-        it->second += sz;
+        std::cerr << "line " << __LINE__ << " (context_group.cpp): trying to increase pos on non-existent context - ignoring" << std::endl;
     }
 }
 
 long ContextGroup::getBitstreamPos( Bitrate b )
 {
-    return getBitstreamPosRef(b);
-}
-
-long& ContextGroup::getBitstreamPosRef( Bitrate b )
-{
-    SMap::iterator it;
-    it = bitstreamPos.find( b );
-    if( it != bitstreamPos.end() )
+    Map::iterator it;
+    it = _ctx.find( b );
+    if( it != _ctx.end() )
     {
-        return it->second;
+        return it->second->pos;
     }
     else
     {
-        bitstreamPos.insert( SPair( b, 0 ) );
-        it = bitstreamPos.find( b );
-        return it->second;
+        std::cerr << "line " << __LINE__ << " (context_group.cpp): trying to read pos from non-existent context - ignoring" << std::endl;
+        return 0;
     }
 }
 
 void ContextGroup::clearBitstreamPos( )
 {
-    bitstreamPos.clear();
+    for( auto c : _ctx )
+    {
+        c.second->pos = 0;
+    }
 }
 
 /*************************************************************
