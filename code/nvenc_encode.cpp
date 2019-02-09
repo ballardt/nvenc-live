@@ -569,7 +569,7 @@ int main(int argc, char* argv[])
 										 config->contextGroups);
 		fwrite(tiledBitstream, sizeof(unsigned char), tiledBitstreamSize, outFile);
 		// config->height = origHeight;
-		if (i == 3) break;
+		//if (i == 3) break;
 		i++;
 	}
 
