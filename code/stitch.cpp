@@ -11,6 +11,8 @@
 
 #include "link_stitcher.h"
 
+#define CTU_SIZE 32
+
 using namespace std;
 
 typedef unsigned char Block;
@@ -23,7 +25,9 @@ enum NALType {
 	SPS,
 	PPS,
 	SEI,
-	OTHER
+	OTHER,
+	END_OF_STREAM,
+	INITIALIZE_NALTYPE
 };
 
 std::map<int, Bitset> ctuOffsetBits;
@@ -96,7 +100,7 @@ int getNextNAL( std::shared_ptr<ContextGroup> group, Bitrate bitrateIdx, std::ve
     }
 #endif
 	if (group->getBitstreamPos( bitrateIdx ) >= group->getBitstreamSize( bitrateIdx )) {
-		return -1;
+		return END_OF_STREAM;
 	}
 	// Go past the first border and consume it.
 	int zeroCounter = 0;
@@ -508,22 +512,18 @@ int doStitching( unsigned char* tiledBitstream,
         group->clearBitstreamPos( );
     }
 	std::vector<Block> nal;
-
-	// Get as many NALs as we have in the stream
-    const int ctuSize = 32;
-	//const int oldCtuOffsetBitSize = ceil(log2(((finalWidth/numTileCols)/ctuSize)*((finalHeight*numTileCols)/ctuSize)));
 	vector<int> oldCtuOffsetBitSizes(contextGroups.size());
 	for (int i=0; i<contextGroups.size(); i++) {
-		oldCtuOffsetBitSizes[i] = ceil(log2((contextGroups[i]->getWidth()/ctuSize)*(contextGroups[i]->getHeight()/ctuSize)));
+		oldCtuOffsetBitSizes[i] = ceil(log2((contextGroups[i]->getWidth()/CTU_SIZE)
+										   *(contextGroups[i]->getHeight()/CTU_SIZE)));
 	}
-	const int newCtuOffsetBitSize = ceil(log2((finalWidth/ctuSize)*(finalHeight/ctuSize)));
-	// TODO based on num tiles and layout
+	const int newCtuOffsetBitSize = ceil(log2((finalWidth/CTU_SIZE)*(finalHeight/CTU_SIZE)));
 	int numTiles = numTileRows * numTileCols;
-	int imgCtuWidth = finalWidth / ctuSize;
-	int tileCtuHeight = (finalHeight / ctuSize) / numTileRows;
+	int imgCtuWidth = finalWidth / CTU_SIZE;
+	int tileCtuHeight = (finalHeight / CTU_SIZE) / numTileRows;
 	int tileCtuWidth = imgCtuWidth / numTileCols;
 	int tileIdx;
-	vector<int> sliceSegAddrs(numTiles); // 0 not used, but convenient for index
+	vector<int> sliceSegAddrs(numTiles);
 	for (int col=0; col<numTileCols; col++) {
 		for (int row=0; row<numTileRows; row++) {
 			tileIdx = (numTileRows * col) + row;
@@ -537,143 +537,90 @@ int doStitching( unsigned char* tiledBitstream,
 	int  nalType;
 	int  bitrateIdx = -1;
 	bool printSEI = false;
-
-	//long posAfterFirstTile[numQualityLevels];
-	//for (int j=0; j<numQualityLevels; j++) {
-    //    posAfterFirstTile[j] = -1;
-    //}
-
-	int  firstTileIdx = 0;
-	while (true)
-    {
-		for (int contextGroupIdx=0; contextGroupIdx<contextGroups.size(); contextGroupIdx++)
+	int  baseTileIdx = 0;
+	for (int contextGroupIdx=0; contextGroupIdx<contextGroups.size(); contextGroupIdx++)
+	{
+		nalType = INITIALIZE_NALTYPE;
+		if (contextGroupIdx > 0)
 		{
-			if (contextGroupIdx > 0) {
-				firstTileIdx += contextGroups[contextGroupIdx-1]->numTileCols * numTileRows;
-			}
-			do
+			baseTileIdx += contextGroups[contextGroupIdx-1]->numTileCols * numTileRows;
+		}
+		while (nalType != END_OF_STREAM)
+		{
+			for (int bitrateIdx=0; bitrateIdx<numQualityLevels; bitrateIdx++)
 			{
-                //if( i >= (int)sliceSegAddrs.size() )
-                //{
-                //    // std::cerr << "line " << __LINE__ << " index i (" << i << ") is >= than number of tiles (" << numTiles << ")" << std::endl;
-                //}
-
-				for (int bitrateIdx=0; bitrateIdx<numQualityLevels; bitrateIdx++)
+				nalType = getNextNAL( contextGroups[contextGroupIdx], (Bitrate)bitrateIdx, &nal );
+				switch (nalType)
 				{
-					if (contextGroupIdx > 0 && tileIdx == -1) {
-                        //contextGroups[contextGroupIdx]->setBitstreamPos( (Bitrate)bitrateIdx, posAfterFirstTile[bitrateIdx] );
-						tileIdx = firstTileIdx;
-					}
-					nalType = getNextNAL( contextGroups[contextGroupIdx], (Bitrate)bitrateIdx, &nal );
-
-					switch (nalType) {
-						case P_SLICE:
-                            // std::cerr << "line " << __LINE__ << " case P_SLICE, i is " << i << std::endl;
-                            if( tileIdx >= (int)sliceSegAddrs.size() )
-                            {
-                                std::cerr << "line " << __LINE__ << " (stitch.cpp): index i (" << tileIdx << ") is >= than number of tiles (" << numTiles << ")" << std::endl;
-                                //exit( -1 );
-								continue;
-                            }
-
-							if (tileBitrates[tileIdx] == bitrateIdx) {
-								modifyPSlice(&nal, (tileIdx==0), (tileIdx==firstTileIdx), sliceSegAddrs[tileIdx],
-											 oldCtuOffsetBitSizes[contextGroupIdx], newCtuOffsetBitSize);
-								std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
-								totalSize += nal.size();
-							}
-							//if (contextGroupIdx == 0 && i == 0) {
-							//	posAfterFirstTile[bitrateIdx] = contextGroups[contextGroupIdx]->getBitstreamPos( (Bitrate)bitrateIdx );
-							//}
-							if (bitrateIdx == numQualityLevels-1)
-                            {
-                                tileIdx++;
-                                // std::cerr << "line " << __LINE__ << " index i is " << i << std::endl;
-                            }
-							if (tileIdx == numTiles) printSEI = true;
-							break;
-						case I_SLICE:
-                            // std::cerr << "line " << __LINE__ << " case I_SLICE, i is " << i << " bitrateIdx=" << bitrateIdx << " contextGroupIdx=" << contextGroupIdx << std::endl;
-                            if( tileIdx >= (int)sliceSegAddrs.size() )
-                            {
-                                std::cerr << "line " << __LINE__ << " (stitch.cpp): index i (" << tileIdx << ") is >= than number of tiles (" << numTiles << ")" << std::endl;
-                                //exit( -1 );
-								continue;
-                            }
-
-							if (tileBitrates[tileIdx] == bitrateIdx) {
-								modifyISlice(&nal, (tileIdx==0), (tileIdx==firstTileIdx), sliceSegAddrs[tileIdx],
-											 oldCtuOffsetBitSizes[contextGroupIdx], newCtuOffsetBitSize);
-								std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
-								totalSize += nal.size();
-							}
-							// If this is the first tile in the first context group, save the pos
-							//if (contextGroupIdx == 0 && i == 0) {
-							//	posAfterFirstTile[bitrateIdx] = contextGroups[contextGroupIdx]->getBitstreamPos( (Bitrate)bitrateIdx );
-							//}
-							if (bitrateIdx == numQualityLevels-1)
-                            {
-                                tileIdx++;
-                                // std::cerr << "line " << __LINE__ << " index i is " << i << std::endl;
-                            }
-							if (tileIdx == numTiles) printSEI = true;
-							break;
-						case SPS:
-							if (bitrateIdx==0 && contextGroupIdx==0) {
-								modifySPS(&nal, finalWidth, finalHeight);
-								std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
-								totalSize += nal.size();
-							}
-							break;
-						case PPS:
-							if (bitrateIdx==0 && contextGroupIdx==0) {
-								modifyPPS(&nal, numTileCols, numTileRows);
-								std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
-								totalSize += nal.size();
-								printSEI = true;
-							}
-							break;
-						case VPS:
-                            // std::cerr << "line " << __LINE__ << " case VPS, i is " << i << std::endl;
-							if (bitrateIdx==0 && contextGroupIdx==0) {
-								std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
-								totalSize += nal.size();
-							}
-							// I believe its now better to handle this in the case of -1 since there
-							// may be multiple SEI in a context group, and we only want to stop
-							// at the very last one.
-							//if (bitrateIdx == numQualityLevels-1) i = 0;
-							break;
-						case SEI:
-                            // std::cerr << "line " << __LINE__ << " case SEI, i is " << i << std::endl;
-							if (printSEI) {
-								std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
-								totalSize += nal.size();
-								printSEI = false;
-							}
-							// I believe its now better to handle this in the case of -1 since there
-							// may be multiple SEI in a context group, and we only want to stop
-							// at the very last one.
-							//if (bitrateIdx == numQualityLevels-1) i = 0;
-							break;
-						case OTHER:
-                            // std::cerr << "line " << __LINE__ << " case OTHER, i is " << i << std::endl;
-							break;
-						case -1:
-                            // std::cerr << "line " << __LINE__ << " case -1, i is " << i << std::endl;
-							if (bitrateIdx == numQualityLevels-1 && contextGroupIdx == contextGroups.size()-1) {
-								goto done;
-							}
-                            else if( bitrateIdx == numQualityLevels-1 )
-                            {
-								tileIdx = -1;
-                            }
-					}
-					nal.clear();
+					case P_SLICE:
+						if (tileBitrates[tileIdx] == bitrateIdx)
+						{
+							modifyPSlice(&nal, (tileIdx==0), (tileIdx==baseTileIdx),
+											sliceSegAddrs[tileIdx],
+											oldCtuOffsetBitSizes[contextGroupIdx],
+											newCtuOffsetBitSize);
+							std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
+							totalSize += nal.size();
+						}
+						if (bitrateIdx == numQualityLevels-1)
+						{
+							tileIdx++;
+						}
+						break;
+					case I_SLICE:
+						if (tileBitrates[tileIdx] == bitrateIdx)
+						{
+							modifyISlice(&nal, (tileIdx==0), (tileIdx==baseTileIdx),
+											sliceSegAddrs[tileIdx],
+											oldCtuOffsetBitSizes[contextGroupIdx],
+											newCtuOffsetBitSize);
+							std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
+							totalSize += nal.size();
+						}
+						if (bitrateIdx == numQualityLevels-1)
+						{
+							tileIdx++;
+						}
+						break;
+					case SPS:
+						if (bitrateIdx == 0 && contextGroupIdx == 0)
+						{
+							modifySPS(&nal, finalWidth, finalHeight);
+							std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
+							totalSize += nal.size();
+						}
+						break;
+					case PPS:
+						if (bitrateIdx == 0 && contextGroupIdx == 0)
+						{
+							modifyPPS(&nal, numTileCols, numTileRows);
+							std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
+							totalSize += nal.size();
+							printSEI = true;
+						}
+						break;
+					case VPS:
+						if (bitrateIdx == 0 && contextGroupIdx == 0)
+						{
+							std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
+							totalSize += nal.size();
+						}
+						break;
+					case SEI:
+						if (printSEI)
+						{
+							std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
+							totalSize += nal.size();
+							printSEI = false;
+						}
+						break;
+					case OTHER:
+					case END_OF_STREAM:
+						break;
 				}
-			} while (tileIdx != -1); // -1 is simply used to indicate that this context group is done
+				nal.clear();
+			}
 		}
 	}
- done:
 	return totalSize;
 }
