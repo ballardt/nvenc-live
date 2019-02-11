@@ -171,13 +171,13 @@ void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width
                     bitrateValues[HIGH_BITRATE],
                     width,
                     config.contextGroups[i]->getHeight(),
-                    config.getNumTiles() ) );
+                    config.contextGroups[i]->getNumTileCols() * config.numTileRows ) );
             config.contextGroups[i]->setContext( LOW_BITRATE,
 			    hw.initializeContext(
                     bitrateValues[LOW_BITRATE],
                     width,
                     config.contextGroups[i]->getHeight(),
-                    config.getNumTiles() ) );
+                    config.contextGroups[i]->getNumTileCols() * config.numTileRows ) );
 		}
 	}
 	// For each encode group, put that image in the frame then encode it
@@ -188,10 +188,6 @@ void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width
 		// TODO replace with Planeset. Probably put in a different function entirely when have time.
 		int yOffset = 0;
 		int uvOffset = 0;
-		// int imageSize = config.contextGroups[i]->width * config.contextGroups[i]->height;
-		// unsigned char* cgImageY = new unsigned char[imageSize];
-		// unsigned char* cgImageU = new unsigned char[imageSize/4];
-		// unsigned char* cgImageV = new unsigned char[imageSize/4];
 
         Planeset& cgImage = config.contextGroups[i]->getPlaneset( );
 
@@ -208,13 +204,13 @@ void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width
         }
 #endif
 		// Get the first tile if this is a subsequent group
-		if (i > 0) {
-			memcpy(cgImage.y, y, width*tileHeight);
-			memcpy(cgImage.u, u, (width*tileHeight)/4);
-			memcpy(cgImage.v, v, (width*tileHeight)/4);
-			yOffset = width*tileHeight;
-			uvOffset = (width*tileHeight)/4;
-		}
+		//if (i > 0) {
+		//	memcpy(cgImage.y, y, width*tileHeight);
+		//	memcpy(cgImage.u, u, (width*tileHeight)/4);
+		//	memcpy(cgImage.v, v, (width*tileHeight)/4);
+		//	yOffset = width*tileHeight;
+		//	uvOffset = (width*tileHeight)/4;
+		//}
 		// Get the rest of the tiles
 		int yCpySize = width * tileHeight * config.numTileRows * config.contextGroups[i]->numTileCols;
 		int uvCpySize = yCpySize / 4;
@@ -226,15 +222,12 @@ void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width
 		// Now put it in the frame and encode it
 		hw.putImageInFrame(cgImage.y, cgImage.u, cgImage.v, width, config.contextGroups[i]->getHeight());
 
-        config.contextGroups[i]->setBitstreamSize(
-            HIGH_BITRATE,
-            sendFrameToNVENC( HIGH_BITRATE, i ) );
-        config.contextGroups[i]->setBitstreamSize(
-            LOW_BITRATE,
-            sendFrameToNVENC( LOW_BITRATE,  i ) );
-		// delete [] cgImageY;
-		// delete [] cgImageU;
-		// delete [] cgImageV;
+		config.contextGroups[i]->setBitstreamSize(
+			HIGH_BITRATE,
+			sendFrameToNVENC( HIGH_BITRATE, i ) );
+		config.contextGroups[i]->setBitstreamSize(
+			LOW_BITRATE,
+			sendFrameToNVENC( LOW_BITRATE,  i ) );
 	}
 }
 
@@ -260,29 +253,30 @@ int main(int argc, char* argv[])
 
 	// Figure out how many contexts we have for each quality
 	int stackHeight = paddedHeight * config.numTileCols;
-	int afterFirst = 0;
+	//int afterFirst = 0;
 	int numContextGroups = 0;
 	int remainingTileCols = config.numTileCols;
 	while (stackHeight > 0) {
 		numContextGroups++;
 		int numTileColsInContextGroup = 0;
 		// If it's after the first column group, we also add the height of the first tile in the image to skip the header stuff
-		if (afterFirst == 1) {
-			while (((paddedHeight * (numTileColsInContextGroup + 1))
-					+ (paddedHeight / config.numTileRows) <= MAX_Y_HEIGHT)
-				   && (remainingTileCols > 0)) {
-				numTileColsInContextGroup++;
-				remainingTileCols--;
-			}
+		//if (afterFirst == 1) {
+		//	while (((paddedHeight * (numTileColsInContextGroup + 1))
+		//			+ (paddedHeight / config.numTileRows) <= MAX_Y_HEIGHT)
+		//		   && (remainingTileCols > 0)) {
+		//		numTileColsInContextGroup++;
+		//		remainingTileCols--;
+		//	}
+		//}
+		//else {
+		while ((paddedHeight * (numTileColsInContextGroup + 1) <= MAX_Y_HEIGHT)
+				&& (remainingTileCols > 0)) {
+			numTileColsInContextGroup++;
+			remainingTileCols--;
 		}
-		else {
-			while ((paddedHeight * (numTileColsInContextGroup + 1) <= MAX_Y_HEIGHT)
-				   && (remainingTileCols > 0)) {
-				numTileColsInContextGroup++;
-				remainingTileCols--;
-			}
-		}
-		int contextGroupHeight = paddedHeight * numTileColsInContextGroup + (afterFirst == 0 ? 0 : (paddedHeight / config.numTileRows));
+		//}
+		//int contextGroupHeight = paddedHeight * numTileColsInContextGroup + (afterFirst == 0 ? 0 : (paddedHeight / config.numTileRows));
+		int contextGroupHeight = paddedHeight * numTileColsInContextGroup;
 		int contextGroupWidth = config.width / config.numTileCols;
         std::shared_ptr<ContextGroup> ptr = std::make_shared<ContextGroup>(
                                                     numTileColsInContextGroup,
@@ -291,9 +285,9 @@ int main(int argc, char* argv[])
 		config.contextGroups.push_back( ptr );
 
 		stackHeight -= paddedHeight * numTileColsInContextGroup;
-		if (afterFirst == 0 && stackHeight > 0) {
-			afterFirst = 1;
-		}
+		//if (afterFirst == 0 && stackHeight > 0) {
+		//	afterFirst = 1;
+		//}
 	}
 
 	FILE* inFile = fopen(config.inputFilename, "rb");

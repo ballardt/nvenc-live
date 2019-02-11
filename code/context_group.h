@@ -41,6 +41,7 @@ public:
 
     inline int      getHeight() const { return height; }
     inline int      getWidth()  const { return width; }
+	inline int      getNumTileCols() const { return numTileCols; }
 
     void            setContext( Bitrate b, AVCodecContext* ctx );
     AVCodecContext* getContext( Bitrate b );
