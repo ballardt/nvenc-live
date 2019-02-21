@@ -10,6 +10,7 @@ WH="--width=3840 --height=2048"
 # VIDEO=wingsuit.yuv
 # WH="--width=1280 --height=720"
 
+
 cd @CMAKE_CURRENT_BINARY_DIR@
 
 rm -rf time filesize qualSize
@@ -67,6 +68,7 @@ else
 	doEncode 1 4
 	doEncode 1 5
 	doEncode 1 6
+	doEncode 1 7
 	doEncode 1 8
 
 	doEncode 2 1
@@ -75,6 +77,7 @@ else
 	doEncode 2 4
 	doEncode 2 5
 	doEncode 2 6
+	doEncode 2 7
 	doEncode 2 8
 
 	doEncode 3 1
@@ -83,6 +86,7 @@ else
 	doEncode 3 4
 	doEncode 3 5
 	doEncode 3 6
+	doEncode 3 7
 	doEncode 3 8
 
 	doEncode 4 1
@@ -91,6 +95,7 @@ else
 	doEncode 4 4
 	doEncode 4 5
 	doEncode 4 6
+	doEncode 4 7
 	doEncode 4 8
 
 	doEncode 5 1
@@ -99,6 +104,7 @@ else
 	doEncode 5 4
 	doEncode 5 5
 	doEncode 5 6
+	doEncode 5 7
 	doEncode 5 8
 
 	doEncode 6 1
@@ -107,6 +113,7 @@ else
 	doEncode 6 4
 	doEncode 6 5
 	doEncode 6 6
+	doEncode 6 7
 	doEncode 6 8
 
 	doEncode 7 1
@@ -115,6 +122,7 @@ else
 	doEncode 7 4
 	doEncode 7 5
 	doEncode 7 6
+	doEncode 7 7
 	doEncode 7 8
 
 	doEncode 8 1
@@ -123,7 +131,10 @@ else
 	doEncode 8 4
 	doEncode 8 5
 	doEncode 8 6
+	doEncode 8 7
 	doEncode 8 8
     done
+    grep user time/time-?x?.txt | sed -e 's/user.*//' -e 's/time.time-//' | sed -e 's/.txt:/ /' -e 's/x/ /' > Times.txt
+    sed -e 'N;s/\n/ /' -e 's/x/ /' -e 's/ time.*//' time/Sizes.txt > Sizes.txt
 fi
 

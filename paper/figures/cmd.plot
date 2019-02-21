@@ -8,8 +8,8 @@ set terminal pdf
 
 set zlabel "MBytes"
 set output "Sizes.pdf"
-splot "Sizes-for-youtubeclip.txt" u 1:2:($3/1000000) with lines
+splot "Sizes.txt" u 1:2:($3/1000000) with lines
 	
 set zlabel "seconds"
 set output "Times.pdf"
-splot "Times-for-youtubeclip.txt" u 1:2:3 with lines
+splot "Times.txt" u 1:2:3 with lines
