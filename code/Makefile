@@ -1,12 +1,12 @@
 INCLUDES=-I/home/griff/Install/boost/include \
          -I/home/griff/Install/ffmpeg-nvenc/include
 
-CXXFLAGS=-g \
+CXXFLAGS=-O3 \
          -Wno-deprecated-declarations \
          -std=c++11 \
 	 $(INCLUDES)
 
-LDFLAGS= -g \
+LDFLAGS= -O3 \
 	 -L/home/griff/Install/ffmpeg-nvenc/lib \
 	 -Wl,-rpath=/home/griff/Install/ffmpeg-nvenc/lib
 
