@@ -22,7 +22,7 @@ public:
 	std::vector<std::shared_ptr<ContextGroup> > contextGroups;
     
     void processInput(int argc, char* argv[]);
-    int* processTileBitrates( char* tileBitratesStr );
+    int* processTileBitrates( const char* tileBitratesStr, int numTiles );
 
     int getNumTiles() const;
 };

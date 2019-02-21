@@ -13,15 +13,15 @@ using namespace std;
  * Process tile bitrates
  * Implementation is sloppy, should be changed to be a file in the future
  */
-int* Config::processTileBitrates( char* tileBitratesStr )
+int* Config::processTileBitrates( const char* tileBitratesStr, int numTiles )
 {
 	int tbsLen = strlen(tileBitratesStr);
-	int* tileBitrates = (int*)malloc(sizeof(int) * tbsLen);
-	for (int i=0; i<strlen(tileBitratesStr); i++) {
+	int* tileBitrates = (int*)malloc(sizeof(int) * numTiles );
+	for (int i=0; i<numTiles; i++) {
 		// The subtraction converts the '1' or '0' to an int
-		tileBitrates[i] = tileBitratesStr[i] - '0';
+		tileBitrates[i] = tileBitratesStr[i%tbsLen] - '0';
 	}
-	this->numTileBitrates = tbsLen;
+	this->numTileBitrates = numTiles;
 	return tileBitrates;
 }
 
@@ -30,6 +30,8 @@ int* Config::processTileBitrates( char* tileBitratesStr )
  */
 void Config::processInput(int argc, char* argv[])
 {
+    char* bitrateString = 0;
+
 	// Default config options
 	this->highBitrate = 1600000;
 	this->lowBitrate  =  800000;
@@ -87,7 +89,7 @@ void Config::processInput(int argc, char* argv[])
 				this->numTileCols = atoi(optarg);
 				break;
 			case 't':
-				this->tileBitrates = processTileBitrates( optarg );
+                bitrateString = strdup( optarg );
 				break;
 		}
 	}
@@ -96,12 +98,23 @@ void Config::processInput(int argc, char* argv[])
 		this->outputFilename == NULL ||
 		this->width == -1 ||
 		this->height == -1 ||
-		this->fps == -1 ||
-		this->tileBitrates == NULL) {
+		this->fps == -1 )
+    {
 		printf("Error: invalid command line parameters. Aborting.\n");
 		exit(1);
 	}
 	int numTiles = this->numTileRows * this->numTileCols;
+
+    if( bitrateString )
+    {
+	    this->tileBitrates = processTileBitrates( bitrateString, numTiles );
+        free( bitrateString );
+    }
+    else
+    {
+	    this->tileBitrates = processTileBitrates( "1", numTiles );
+    }
+
 	if (this->numTileBitrates != numTiles) {
 		printf("Error: incorrect number of tile bitrates specified. Aborting.\n");
 		exit(1);

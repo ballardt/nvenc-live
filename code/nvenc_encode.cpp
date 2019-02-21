@@ -183,6 +183,7 @@ void encodeFrame(unsigned char* y, unsigned char* u, unsigned char* v, int width
 	// For each encode group, put that image in the frame then encode it
 	int currTile = 0;
 	int tileHeight = height / (config.numTileRows * config.numTileCols);
+
 	for (int i=0; i<config.contextGroups.size(); i++) {
 		// First, get the image for this encode group
 		// TODO replace with Planeset. Probably put in a different function entirely when have time.
