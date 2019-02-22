@@ -9,7 +9,7 @@ The rest of this paper is organized as follows: ...
 
 \begin{figure*}[t]
 	\centering
-	\includegraphics[width=\textwidth]{figures/Visio-Streaming_scenario_v1.pdf}
+	\includegraphics[width=0.8\textwidth]{figures/Streaming_scenario_v2.pdf}
 	\caption{An illustration of the pipeline}
 \end{figure*}
 
@@ -103,7 +103,7 @@ The stitching process is performed with the Boost C++ dynamic\_bitstream API, wh
 
 In this work, we use the NVIDIA GTX 1080 Ti, a state-of-the-art consumer-grade GPU. We chose this GPU because it is powerful, widely available, and inexpensive enough for the general public. As demonstrated in Section 5, this GPU is capable of encoding video streams much faster than our real-time target. There are, however, two limitations placed upon this GPU that we must consider.
 
-First, the maximum input image size is $8192\times8192$ pixels. Most 360-degree videos are only $3840\times2048$ pixels, but recall that we stack tile columns on top of one another before sending the image to the GPU. The maximum limit is therefore reached with only a few tile columns, forcing us to use wide tile columns which may not be granular enough for ABR streaming. To get around this, we divide the image into multiple sub-images whose columns do not exceed $8192$ pixels when stacked, and encode each of these sub-images independently, once at either bitrate. Specifying more tile columns will thus require additional encodes for each frame, but, fortunately, the GPU encoder is fast enough to keep the total encode time well below the real-time target for realistic tile configurations. 
+First, the maximum input image size is $8192\times8192$ pixels. Most 360-degree videos are only $3840\times2048$ pixels, but recall that we stack tile columns on top of one another before sending the image to the GPU. The maximum limit is therefore reached with only a few tile columns, forcing us to use wide tile columns which may not be granular enough for ABR streaming. To get around this, we divide the image into multiple sub-images whose columns do not exceed $8192$ pixels when stacked, and encode each of these sub-images independently, once at either bitrate. Specifying more tile columns will thus require additional encodes for each frame, but, fortunately, the GPU encoder is fast enough to keep the total encode time well below the real-time target for realistic tile configurations.
 
 We must make a few small changes to the stitching process to handle sub-images. Note that the location of each tile within a sub-image may not correspond to its location in the final stitched image. For example, consider a video with 6 tile columns. From left to right, let us say the first 4 columns constitute one sub-image, and the final 2 columns constitute another. In this case, the CTU offsets of the first tile row in the first sub-image will remain the same, but the offsets of all other tiles will change in the final image. Because the final image size is different from the size of either sub-image, the number of bits used to encode the CTU offset will change as well. Furthermore, the first tile in the second sub-image will not contain a CTU offset in the NAL header, requiring this field to be inserted at the correct location. Finally, multiple similar parameter sets will be produced, so we keep one and discard the others. Choosing which one to keep is arbitrary, as differing important fields will be modified during the stitching process.
 
@@ -112,10 +112,10 @@ Second, as detailed in Section 2, the GPU driver does not allow more than 2 simu
 \subsection{Installing and Using RATS}
 RATS was developed and evaluated on Ubuntu 18.04, using CUDA 9.2, FFmpeg 3.4, and Boost 1.64. We use a modified version of FFmpeg which sets \texttt{sliceModeData=3} and adds a new field, \texttt{numSlices}, to \texttt{AVCodecContext} in order to specify the tile configuration at run-time. FFmpeg must be configured to use CUDA and produce static libraries during compilation.
 
-Details on the installation and usage of RATS, as well as an overview of the source code, can be found in the git repository \footnote{https://github.com/ballardt/nvenc-live}. 
+Details on the installation and usage of RATS, as well as an overview of the source code, can be found in the git repository \footnote{https://github.com/ballardt/nvenc-live}.
 
 \section{Evaluation}
-To evaluate RATS, we analyze its performance across multiple tile configurations. In particular, we examine the speed of the encoding process, the size of the output, and the quality of the final image. 
+To evaluate RATS, we analyze its performance across multiple tile configurations. In particular, we examine the speed of the encoding process, the size of the output, and the quality of the final image.
 
 To the best of our knowledge, RATS contains the first open source HEVC tile stitcher. Furthermore, RATS is the first GPU-powered tile-based encoder. For these reasons it is difficult to directly compare RATS to other programs; software-based tiling encoders will be much slower, and no existing software or hardware encoders provide stitching. We therefore do not consider other HEVC encoders in the process
 
