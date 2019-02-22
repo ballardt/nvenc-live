@@ -109,6 +109,11 @@ We must make a few small changes to the stitching process to handle sub-images. 
 
 Second, as detailed in Section 2, the GPU driver does not allow more than 2 simultaneous context configurations during the encoding process. Each sub-image at either bitrate requires an independent context configuration, i.e. an instance of AVCodecContext. Each sub-image at either quality requires its own context, so this limitation would normally prevent us from making use of the sub-image technique detailed above. Fortunately, it is possible to remove the 2 context limit by sending a particular bytestream to the GPU. A script to do so is provided in nvidia-patch [CITE, or footnote], which we used for this work.
 
+\begin{figure}[t]
+	\includegraphics[width=\columnwidth]{figures/times_v1.pdf}
+	\caption{Encoding time for a 30s video across tile configurations. The tile qualities alternate between high and low in a checkerboard pattern. For each configuration that has an odd number of tiles, we set the extra tile to be low quality. Note the lower encoding time for 8 columns vs 7 columns which is due to better alignment.}
+\end{figure}
+
 \subsection{Installing and Using RATS}
 RATS was developed and evaluated on Ubuntu 18.04, using CUDA 9.2, FFmpeg 3.4, and Boost 1.64. We use a modified version of FFmpeg which sets \texttt{sliceModeData=3} and adds a new field, \texttt{numSlices}, to \texttt{AVCodecContext} in order to specify the tile configuration at run-time. FFmpeg must be configured to use CUDA and produce static libraries during compilation.
 
@@ -153,15 +158,16 @@ To the best of our knowledge, RATS contains the first open source HEVC tile stit
 %	\caption{Encoding speed vs. tile quality for $4\times4$ tiles. All tiles on the left are of the high bitrate, while those on the right are of the low bitrate.}
 %\end{figure}
 
-\begin{figure}[t]
-	\includegraphics[width=\columnwidth]{figures/Sizes.pdf}
-	\caption{Encoding output size for a 30s video across tile configurations. The tile qualities alternate between high and low in a checkerboard pattern.}
-\end{figure}
+
+
+
 
 \begin{figure}[t]
-	\includegraphics[width=\columnwidth]{figures/Times.pdf}
-	\caption{Encoding speed for a 30s video across tile configurations. The tile qualities alternate between high and low in a checkerboard pattern. Each configuration has an odd number of tiles, and we set the extra tile to be low quality.}
+	\includegraphics[width=\columnwidth]{figures/sizes_v1.pdf}
+	\caption{Encoding output size in MB for a 30s video across tile configurations. The tile qualities alternate between high and low in a checkerboard pattern. }
 \end{figure}
+
+
 
 \section{Future Work}
 
@@ -177,3 +183,8 @@ It may be desirable to allow the client to choose their bitrate at the tile leve
 Sharing CUDA contexts (not used): https://devtalk.nvidia.com/default/topic/1031189/video-codec-sdk/sharing-the-same-cuda-context-for-encoding-nvenc-and-decoding-nvdec-/
 
 NVIDIA patch (used): https://github.com/keylase/nvidia-patch
+
+\begin{figure}[t]
+	\includegraphics[width=\columnwidth]{figures/times_size_combined_v1.pdf}
+	\caption{JUST FOR US. A combined view of the encoding time and the resulting output size.}
+\end{figure}
