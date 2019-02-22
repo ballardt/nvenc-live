@@ -114,6 +114,35 @@ RATS was developed and evaluated on Ubuntu 18.04, using CUDA 9.2, FFmpeg 3.4, an
 
 Details on the installation and usage of RATS, as well as an overview of the source code, can be found in the git repository \footnote{https://github.com/ballardt/nvenc-live}.
 
+\section{RATS in an infrastructure}
+
+The main contribution of RATS to the state-of-the-art is the efficient and accessible
+tiling of videos with HD quality and better on a single computer equipped with a
+suitable generally programmable consumer-grade GPU.
+We circumvent certain limitations of the GPU and are thereby able to generate videos
+that are compliant with the advanced tiling scheme of HEVC.
+
+In the demo, we present
+a variation of our solution that stitches videos comprised of tiles of various
+qualities before delivery to an end-system.
+This is not the only possible approach, and it is actually somewhat more complex
+than the creation of distinct video streams for each individual tile.
+DASH provides the extension DASH-SRD (spatial relationship description), which
+allows a client to access tile stream individually, synchronize them and make
+independent quality choices for each of them. Providing the appropriate data and
+metadata for this approach is actually a simplification to the approach that we
+demonstrate in this paper.
+
+The remaining infrastructure for delivering the encoded video is entirely comprised
+of open-source software, and currently delivery makes use of HTTP adapative streaming.
+The following packages have been used:
+\begin{itemize}
+\item NGinx: available from \url{https://github.com/nginx/nginx.git}
+\item Kaltura nginx-vod-module: available from \url{https://github.com/kaltura/nginx-vod-module.git}
+\item MediaElement.js: available from \url{https://www.mediaelementjs.com/}
+\end{itemize}
+
+
 \section{Evaluation}
 To evaluate RATS, we analyze its performance across multiple tile configurations. In particular, we examine the speed of the encoding process, the size of the output, and the quality of the final image.
 
