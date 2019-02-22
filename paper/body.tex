@@ -1,8 +1,8 @@
 
 \section{Introduction}
-The introduction of hardware HEVC encoders to consumer-grade GPUs has opened the door to mass 360-degree and 4K video livestreaming, but does not immediately offer a solution to adaptive video streaming. Recently, a significant body of work on tile-based adaptive streaming for 360-degree and 4K video has appeared, in which the quality requested for each section of a video corresponds to how interesting it is, allowing clients to view the most important parts of a video, or, e.g., those which a user is moving their head towards, in high-quality without stalling. This is straightforward for pre-rendered video, but is more complicated in a livestreaming scenario because each quality requires another encode, necessarily introducing some delay in the availability of a new segment. Furthermore, tiling, which must occur within the HEVC encoder prior to generation of the bitstream, is not supported by existing hardware encoders. One can try to get around this by feeding each tile to the encoder as a separate video and stitching them together afterwards, but even top-of-the-line consumer-grade GPUs only support two contiguous encoding processing, forcing the user to either encode the whole frame at two different qualities, or divide each frame into two tiles but only offer a single quality for either tile. In the former case, tiling does not occur; in the latter, the tile sizes are so large as to render the point moot, and the video stream is not adaptive because only one quality is available for either half.
+Hardware HEVC encoders have recently appeared on consumer-grade GPUs, opening the door to mass 360-degree and 4K video livestreaming. However, traditional methods of adaptive bitrate (ABR) streaming do not work on these ultra-high definition (UHD) videos because they will either be too large for continuous playback or too low-quality to be enjoyable. A body of work on tile-based ABR streaming for UHD video has recently appeared, in which the quality requested for each section of a video corresponds to how interesting it is. This allows end-users to view the most important parts of a video in high-quality without stalling. This is straightforward for pre-rendered video, but is more complicated in a livestreaming scenario because each quality requires another encode, introducing some delay in the availability of a new segment. Furthermore, tiling is not supported by existing hardware encoders. One can try to get around this by feeding each tile to the encoder as a separate video and stitching them together afterwards, but even top-of-the-line consumer-grade GPUs only support two contiguous encoding processes by default, forcing the user to either encode the whole frame at two different qualities, or divide each frame into two tiles but only offer a single quality for either tile. In the former case, tiling does not occur; in the latter, the tile sizes are too large to adequately shrink the output size while keeping the interesting parts high-quality, and the video stream is not adaptive because only one quality is available for either half.
 
-To combat these challenges, we introduce RATS, a GPU-based HEVC encoding pipeline to tile, encode, and stitch video at multiple qualities in real-time on a frame-by-frame basis. RATS uses HEVC slices in conjunction with tiles to encode each region of a video independently, so that a player can pick and choose which quality they want for each region. To do so, the source video stream is divided into vertical strips, which are stacked on top of one another. This rearranged video image is fed to the encoder with slice boundaries specified to at least be the edges of these strips, so that each slice is some fraction of the horizontal width and, possibly, vertical height. This process occurs twice for each frame with different bitrate configurations, resulting in high-quality and low-quality outputs. When the video is reconstructed during playback, each slice is an independently-decodable region of video, so we are free to pick and choose either quality for each region of the video shown to the user.
+To combat these challenges, we introduce Real-time Adaptive Three-sixty Streaming, or RATS, a GPU-based HEVC encoding pipeline to tile, encode, and stitch video at multiple qualities in real-time on a frame-by-frame basis. RATS uses HEVC slices in conjunction with tiles to encode each region of a video independently, such that a player may pick and choose a different qualities for each region. To do so, the source video stream is divided into vertical strips which are stacked on top of one another. This rearranged video image is fed to the encoder with slice boundaries specified to at least be the edges of the source videos in the strips, so that each slice is some fraction of the final image. This process occurs twice for each frame with different bitrate configurations, resulting in high-quality and low-quality outputs. When the video is reconstructed during playback, each slice is an independently-decodable region of video, so we are free to pick and choose either quality for each region of the video shown to the user.
 
 The rest of this paper is organized as follows: ...
 
@@ -19,7 +19,7 @@ The most computation-heavy components of the HEVC encoding process, such as moti
 
 HEVC encoders convert raw video into an HEVC bitstream consisting of multiple sequential NAL units via a complex implicit syntax. Each NAL unit contains some header information followed by raw image data. For videos without slicing or tiling, most NAL units correspond to a single full frame of video; however, because slices and tiles are independently-decodable, each tile or slice within a video frame is a self-contained NAL unit. Interestingly, we can then treat any rectangular arrangement of HEVC bitstreams as tiles within a single video by alternating their NAL units and manipulating specific values in the NAL headers. This process, in which multiple bitstreams are joined to form one bitstream which displays all constituent bitstreams in different regions of the final video, is known as \textit{stitching}. (Maybe include some references to works which do stitching or something)
 
-NVENC is a hardware video encoder present on newer Nvidia GPUs, and is the state-of-the-art hardware HEVC encoder. Note that HEVC is not easily data-parallelizable; as a result, NVENC is an ASIC separate from the CUDA cores. Interaction with NVENC occurs via the NVENCODE API, and offers the user a handful of parameters for the encoder, such as target bitrate, slice boundaries, and GOP specifications. It is possible to swap out encoder configurations between frames, allowing one to encode multiple videos simultaneously, but even top-of-the-line consumer GPUs only support a maximum of two contiguous configurations. Note that these configurations are not simply encoding parameters, but also contain, e.g., the previous frame data necessary to encode the next P- or B-frame. This is a limitation enforced by the driver, and supercomputing GPUs, such as the Nvidia Titan V, do not have such limits. Such GPUs are, however, prohibitively expensive for most consumers, so we do not consider them here.
+NVENC is a hardware video encoder present on newer Nvidia GPUs, and is the state-of-the-art hardware HEVC encoder. Note that HEVC is not easily data-parallelizable; as a result, NVENC is an ASIC separate from the CUDA cores. Interaction with NVENC occurs via the NVENCODE API, and offers the user a handful of parameters for the encoder, such as target bitrate, slice boundaries, and GOP specifications. It is possible to swap out encoder configurations between frames, allowing one to encode multiple videos simultaneously, but even top-of-the-line consumer GPUs only support a maximum of two contiguous configurations by default. Note that these configurations are not simply encoding parameters, but also contain the previous frame data necessary to encode the next P- or B-frame. These configurations must therefore exist continuously throughout the encoding process. This is a limitation enforced by the driver, and supercomputing GPUs, such as the Nvidia Titan V, do not have such limits. Such GPUs are prohibitively expensive for most consumers, so we do not consider them here.
 
 \section{RATS Implementation}
 To work within the confines imposed by NVENC, namely the lack of tile support and limitation to two simultaneous encoding sessions, we divide the real-time adaptive encoding pipeline into an encoding component, in which a raw video frame is manipulated and converted into low- and high-quality bitstreams, and a stitching component, in which these bitstreams are combined to be displayed to the user.
@@ -31,7 +31,7 @@ In a YUV420p video, each frame of the video consists of the titular Y, U, and V 
 
 Rearranging is performed on each component via memcpy, with a length equal to the width of a tile column. Recall that the purpose of rearranging is to set the vertical tile boundaries, as NVENC slicing will handle the horizontal tile boundaries. Tile rows are therefore ignored at this stage. Within each tile column, we begin at the first pixel row and move down, calling memcpy on each pixel row and placing the contents in a new array, before moving on to the next tile column once we hit the bottom of the image. The result of this process will be an image in which the tile columns are effectively stacked on top of one another.
 
-To interact with NVENC, we use the libavcodec API provided by FFmpeg. This API handles much of the tedium of using NVENC, allowing us to simply do some initialization and call a handful of methods to interact with the GPU. The high- and low-bitrate configurations are distinct instances of the AVCodecContext struct, which are initialized before the encoding process begins. During the encoding process, a rearranged image is passed to NVENC twice, once with each AVCodecContext instance, to obtain the low- and high-bitrate bitstreams. Within NVENC, we set sliceModeData equal to the total number of tiles desired. The left and right tile boundaries will be the edges of the image fed to NVENC, so the slicing will create the top and bottom boundaries.
+To interact with NVENC, we use the libavcodec API provided by FFmpeg. The high- and low-bitrate configurations are distinct instances of the AVCodecContext struct, which are initialized before the encoding process begins. During the encoding process, a rearranged image is passed to NVENC twice, once with each AVCodecContext instance, to obtain the low- and high-bitrate bitstreams. Within NVENC, we set sliceModeData equal to the total number of tiles desired. The left and right tile boundaries will be the edges of the image fed to NVENC, so the slicing will create the top and bottom boundaries.
 
 \subsection{Stitching}
 The bitstreams resulting from the encoding process contain the independently-decodable slices which will function as our tiles, but they will still be stacked from top-to-bottom. Fortunately, we must only modify a few fields in the NAL headers to convert the slices to tiles and arrange them in the desired configuration. Table ~\ref{tab:stitch} lists all such fields. Note that within an HEVC bitstream, \textit{NAL} and \textit{slice} are equivalent terms which may be used interchangeably. To avoid confusion, we will retain the use of "slice" to refer to an independently-decodable horizontal strip of an image.
@@ -44,62 +44,103 @@ Byte alignment occurs at the end of a NAL header or NAL data. After the last sem
 
 The stitching process is performed with the Boost C++ dynamic\_bitstream API, which allows one to read bytes into a vector of bits, manipulate these bits, then convert the bit vector into raw bytes. The high- and low-bitrate configurations are identical except for the specified bitrate, and the resulting NAL headers do not change based on, e.g., content, so the output from NVENC is highly predictable. Therefore, navigating to the right spot in the bitstream and making our changes is a straightforward process.
 
+%%\renewcommand{\figurename}{Tab.}
+%%\setcounter{figure}{1}
+%%\begin{table*}[t]
+%%	\centering
+%%	\begin{tabular}{llp{3in}r}
+%%		\toprule
+%%		NAL Type & Field & Description & Fixed value \\
+%%		\midrule
+%%		\multirow{2}{*}{SPS} & \texttt{pic\_width\_in\_luma\_samples} & Pixel width of the final video. & \\ \cmidrule[0.5pt]{2-4}
+%%		& \texttt{pic\_hidth\_in\_luma\_samples} & Pixel height of the final video. & \\
+%%		\midrule[1pt]
+%%		\multirow{5}{*}[-5em]{PPS} & \texttt{tiles\_enabled\_flag} & Converts slices to tiles and adds several relevant fields to the bitstream syntax. & \texttt{1} \\ \cmidrule[0.5pt]{2-4}
+%%		& \texttt{num\_tile\_columns\_minus1} & Number of tile colums minus 1. & \\ \cmidrule[0.5pt]{2-4}
+%%		& \texttt{num\_tile\_rows\_minus1} & Number of tile rows minus 1. & \\ \cmidrule[0.5pt]{2-4}
+%%		& \texttt{uniform\_spacing\_flag} & Whether tiles are evenly sized. If \texttt{0}, manual tile boundaries must be specified. & \texttt{1} \\ \cmidrule[0.5pt]{2-4}
+%%		& \texttt{loop\_filter\_across\_tiles\_enabled\_flag} & Whether in-loop filtering should be performed across tile boundaries. This is optional, and may be desired if there is less of a difference between the high and low bitrates. & \texttt{1} \\
+%%		\midrule[1pt]
+%%		\multirow{4}{*}[-6em]{\shortstack{I-slice, \\P-slice}} & \texttt{first\_slice\_segment\_in\_pic\_flag} & Should be \texttt{1} in the top-leftmost tile, and \texttt{0} in all other tiles. If \texttt{0}, the slice segment address must be specified. & \\ \cmidrule[0.5pt]{2-4}
+%%		& \texttt{slice\_segment\_address} & The address of the top-leftmost CTU in this tile, beginning from 0 at the top-leftmost CTU in the entire image, and incrementing across the image, moving down and continuing at the end of the row.& \\ \cmidrule[0.5pt]{2-4}
+%%		& \texttt{slice\_loop\_filter\_across\_slices\_enabled\_flag} & Similar to the loop filter flag in the PPS, but specifically concerned with in-loop filtering across the left and top boundaries of the tile. & \texttt{1} \\ \cmidrule[0.5pt]{2-4}
+%%		& \texttt{num\_entry\_point\_offsets} & Used to treat \texttt{emulation\_prevention\_three\_byte} as part of the tile data, which is not desired here. & \texttt{1} \\
+%%		\bottomrule
+%%	\end{tabular}
+%%	\caption{Table containing all NAL header modifications. The "Fixed value" column contains the bit values of hard-coded fields, such as important flags. Missing values indicate that the value may vary depending on the video and parameters used. In this case, all such values would be encoded using unsigned Expontential-Golomb.}
+%%	\label{tab:stitch}
+%%\end{table*}
+%%\renewcommand{\figurename}{Fig.}
+%%\setcounter{figure}{2}
 \renewcommand{\figurename}{Tab.}
 \setcounter{figure}{1}
-\begin{table*}[t]
-	\centering
-	\begin{tabular}{llp{3in}r}
+\begin{table}
+	\begin{tabular}{llr}
 		\toprule
-		NAL Type & Field & Description & Fixed value \\
+		NAL Type & Field & Value \\
 		\midrule
-		\multirow{2}{*}{SPS} & \texttt{pic\_width\_in\_luma\_samples} & Pixel width of the final video. & \\ \cmidrule[0.5pt]{2-4}
-		& \texttt{pic\_hidth\_in\_luma\_samples} & Pixel height of the final video. & \\
+		\multirow{2}{*}[-.3em]{SPS} & \texttt{pic\_width\_in\_luma\_samples} & \\ \cmidrule[0.5pt]{2-3}
+		& \texttt{pic\_height\_in\_luma\_samples} & \\
 		\midrule[1pt]
-		\multirow{5}{*}[-5em]{PPS} & \texttt{tiles\_enabled\_flag} & Converts slices to tiles and adds several relevant fields to the bitstream syntax. & \texttt{1} \\ \cmidrule[0.5pt]{2-4}
-		& \texttt{num\_tile\_columns\_minus1} & Number of tile colums minus 1. & \\ \cmidrule[0.5pt]{2-4}
-		& \texttt{num\_tile\_rows\_minus1} & Number of tile rows minus 1. & \\ \cmidrule[0.5pt]{2-4}
-		& \texttt{uniform\_spacing\_flag} & Whether tiles are evenly sized. If \texttt{0}, manual tile boundaries must be specified. & \texttt{1} \\ \cmidrule[0.5pt]{2-4}
-		& \texttt{loop\_filter\_across\_tiles\_enabled\_flag} & Whether in-loop filtering should be performed across tile boundaries. This is optional, and may be desired if there is less of a difference between the high and low bitrates. & \texttt{1} \\
+		\multirow{4}{*}[-1em]{PPS} & \texttt{tiles\_enabled\_flag} & \texttt{1} \\ \cmidrule[0.5pt]{2-3}
+		& \texttt{num\_tile\_columns\_minus1} & \\ \cmidrule[0.5pt]{2-3}
+		& \texttt{num\_tile\_rows\_minus1} & \\ \cmidrule[0.5pt]{2-3}
+		& \texttt{uniform\_spacing\_flag} & \texttt{1} \\
 		\midrule[1pt]
-		\multirow{4}{*}[-6em]{\shortstack{I-slice, \\P-slice}} & \texttt{first\_slice\_segment\_in\_pic\_flag} & Should be \texttt{1} in the top-leftmost tile, and \texttt{0} in all other tiles. If \texttt{0}, the slice segment address must be specified. & \\ \cmidrule[0.5pt]{2-4}
-		& \texttt{slice\_segment\_address} & The address of the top-leftmost CTU in this tile, beginning from 0 at the top-leftmost CTU in the entire image, and incrementing across the image, moving down and continuing at the end of the row.& \\ \cmidrule[0.5pt]{2-4}
-		& \texttt{slice\_loop\_filter\_across\_slices\_enabled\_flag} & Similar to the loop filter flag in the PPS, but specifically concerned with in-loop filtering across the left and top boundaries of the tile. & \texttt{1} \\ \cmidrule[0.5pt]{2-4}
-		& \texttt{num\_entry\_point\_offsets} & Used to treat \texttt{emulation\_prevention\_three\_byte} as part of the tile data, which is not desired here. & \texttt{1} \\
+		\multirow{3}{*}[-1em]{\shortstack{I-slice, \\P-slice}} & \texttt{first\_slice\_segment\_in\_pic\_flag} & \\ \cmidrule[0.5pt]{2-3}
+		& \texttt{slice\_segment\_address} & \\ \cmidrule[0.5pt]{2-3}
+		\cmidrule[0.5pt]{2-3}
+		& \texttt{num\_entry\_point\_offsets} & \texttt{1} \\
 		\bottomrule
 	\end{tabular}
-	\caption{Table containing all NAL header modifications. The "Fixed value" column contains the bit values of hard-coded fields, such as important flags. Missing values indicate that the value may vary depending on the video and parameters used. In this case, all such values would be encoded using unsigned Expontential-Golomb.}
+	\caption{Table containing all NAL header fields requiring modification. Required literal bit values are provided when necessary. Note that \texttt{num\_entry\_point\_offsets} is an Exponential Golomb-coded number, so a literal bit value of \texttt{1} corresponds to a logical value of 0.}
 	\label{tab:stitch}
-\end{table*}
+\end{table}
 \renewcommand{\figurename}{Fig.}
 \setcounter{figure}{2}
 
-\section{Installing and Using RATS}
-RATS was developed and evaluated on Ubuntu 18.04, using CUDA 9.2, FFmpeg 3.4, and Boost 1.64. We use a slightly modified version of FFmpeg which sets \texttt{sliceModeData=3} and adds a new field, \texttt{numSlices}, to \texttt{AVCodecContext} so that we may specify the tile configuration at run-time. FFmpeg must be configured with CUDA support, and to produce static libraries.
+\subsection{Hardware Limitations}
 
-To build RATS, first clone the git repository \textbf{https://github.com/\\ballardt/nvenc-live}. Modify the paths in \texttt{build.sh} to point to the FFmpeg static libraries, then run it. The resulting executable, \texttt{encode}, is the RATS command-line program.
+In this work, we use the NVIDIA GTX 1080 Ti, a state-of-the-art consumer-grade GPU. We chose this GPU because it is powerful, widely available, and inexpensive enough for the general public. As demonstrated in Section 5, this GPU is capable of encoding video streams much faster than our real-time target. There are, however, two limitations placed upon this GPU that we must consider.
 
-More details on installation and usage can be found in the git repository.
+First, the maximum input image size is $8192\times8192$ pixels. Most 360-degree videos are only $3840\times2048$ pixels, but recall that we stack tile columns on top of one another before sending the image to the GPU. The maximum limit is therefore reached with only a few tile columns, forcing us to use wide tile columns which may not be granular enough for ABR streaming. To get around this, we divide the image into multiple sub-images whose columns do not exceed $8192$ pixels when stacked, and encode each of these sub-images independently, once at either bitrate. Specifying more tile columns will thus require additional encodes for each frame, but, fortunately, the GPU encoder is fast enough to keep the total encode time well below the real-time target for realistic tile configurations. 
+
+We must make a few small changes to the stitching process to handle sub-images. Note that the location of each tile within a sub-image may not correspond to its location in the final stitched image. For example, consider a video with 6 tile columns. From left to right, let us say the first 4 columns constitute one sub-image, and the final 2 columns constitute another. In this case, the CTU offsets of the first tile row in the first sub-image will remain the same, but the offsets of all other tiles will change in the final image. Because the final image size is different from the size of either sub-image, the number of bits used to encode the CTU offset will change as well. Furthermore, the first tile in the second sub-image will not contain a CTU offset in the NAL header, requiring this field to be inserted at the correct location. Finally, multiple similar parameter sets will be produced, so we keep one and discard the others. Choosing which one to keep is arbitrary, as differing important fields will be modified during the stitching process.
+
+Second, as detailed in Section 2, the GPU driver does not allow more than 2 simultaneous context configurations during the encoding process. Each sub-image at either bitrate requires an independent context configuration, i.e. an instance of AVCodecContext. Each sub-image at either quality requires its own context, so this limitation would normally prevent us from making use of the sub-image technique detailed above. Fortunately, it is possible to remove the 2 context limit by sending a particular bytestream to the GPU. A script to do so is provided in nvidia-patch [CITE, or footnote], which we used for this work.
+
+\subsection{Installing and Using RATS}
+RATS was developed and evaluated on Ubuntu 18.04, using CUDA 9.2, FFmpeg 3.4, and Boost 1.64. We use a modified version of FFmpeg which sets \texttt{sliceModeData=3} and adds a new field, \texttt{numSlices}, to \texttt{AVCodecContext} in order to specify the tile configuration at run-time. FFmpeg must be configured to use CUDA and produce static libraries during compilation.
+
+Details on the installation and usage of RATS, as well as an overview of the source code, can be found in the git repository \footnote{https://github.com/ballardt/nvenc-live}. 
 
 \section{Evaluation}
-To evaluate RATS, we compare its performance to an existing tiling video encoder, investigate the impact on tile size and quality on performance, and measure the relative time of the rearranging, encoding, and stitching components.
+To evaluate RATS, we analyze its performance across multiple tile configurations. In particular, we examine the speed of the encoding process, the size of the output, and the quality of the final image. 
 
-To the best of our knowledge, RATS contains the first available HEVC tile stitcher. Furthermore, RATS is the first GPU-powered tile-based encoder. It is therefore difficult to directly compare RATS to other programs; software-based tiling encoders will clearly be much slower and cannot be stitched, and GPU encoders without RATS simply perform one step of the RATS pipeline without the others. However, it is worthwhile to have some idea of how much more quickly this work is than existing software encoders. 
+To the best of our knowledge, RATS contains the first open source HEVC tile stitcher. Furthermore, RATS is the first GPU-powered tile-based encoder. For these reasons it is difficult to directly compare RATS to other programs; software-based tiling encoders will be much slower, and no existing software or hardware encoders provide stitching. We therefore do not consider other HEVC encoders in the process
 
-\begin{figure}[t]
-	% \includegraphics[width=\columnwidth]{figures/hevc_eval_qual.png}
-	\caption{Encoding speed vs. tile quality for $4\times4$ tiles. All tiles on the left are of the high bitrate, while those on the right are of the low bitrate.}
-\end{figure}
+%\begin{figure}[t]
+%	% \includegraphics[width=\columnwidth]{figures/hevc_eval_qual.png}
+%	\caption{Encoding speed vs. tile quality for $4\times4$ tiles. All tiles on the left are of the high bitrate, while those on the right are of the low bitrate.}
+%\end{figure}
 
 \begin{figure}[t]
 	\includegraphics[width=\columnwidth]{figures/Sizes.pdf}
-	\caption{Encoding output size across tile configurations. In each case, half of the tiles are of a high bitrate, half are of a low bitrate, and tile qualities alternate in a checkerboard pattern.}
+	\caption{Encoding output size for a 30s video across tile configurations. The tile qualities alternate between high and low in a checkerboard pattern.}
 \end{figure}
 
 \begin{figure}[t]
 	\includegraphics[width=\columnwidth]{figures/Times.pdf}
-	\caption{Encoding speed across tile configurations. The tile qualities alternate between high and low in a checkerboard pattern. Each configuration has an odd number of tiles, and we set the extra tile to be low quality. The video used was 30s long, so the red line indicates the speed necessary to achieve real-time ABR encoding.}
+	\caption{Encoding speed for a 30s video across tile configurations. The tile qualities alternate between high and low in a checkerboard pattern. Each configuration has an odd number of tiles, and we set the extra tile to be low quality.}
 \end{figure}
 
+\section{Future Work}
+
+In this work, we have focused on the problem of encoding small independent regions of a video at multiple bitrates in real-time, as this is the primary technical challenge involved in 360-degree or 4K ABR livestreaming. However, in the interest of developing a fully-realized demonstration, we intend to place this work within a web-based streaming platform where clients could watch a live video from, e.g., the web browser on their phone. There exist an abundance of tools to set up a DASH-like streaming platform for H.264, but our options are more limited with HEVC.
+
+One potential implementation may be as follows: For each frame, the stitching process is performed multiple times with different bitrate configurations requiring different network capabilities. For example, one configuration may contain only a few high-quality tiles in very important regions, while another may use high-quality tiles almost everywhere. Important regions may be found automatically via [CITE]. These frames are placed in short video segments such that the first frame is always an I-frame. Kaltura, an open source video-on-demand platform, is used to manage these segments, and clients can stream them via MediaElementJS. This solution is analogous to DASH, using the server to store a few pre-rendered qualities in short chunks which can be requested by the client.
+
+It may be desirable to allow the client to choose their bitrate at the tile level. For example, if a user looks in a particular direction, we may wish to increase the quality only in that area. However, this would require either that the server perform custom stitching for each client, or that the stitching component occurs in the browser on the client side. In the first case, the server would quickly be overloaded; in the second, stitching would take much longer than real-time. A better alternative may be to group users into categories based on where they are looking and produce video segments for each category. All users will be watching the stream at the same time and are likely to follow the most interesting parts of the image, so this may naturally produce videos in which important features are of a high quality. We intend to explore several of these options in a future work.
 
 \section{Conclusion}
 
