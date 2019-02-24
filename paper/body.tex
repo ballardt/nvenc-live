@@ -30,6 +30,8 @@ NVENC is a state-of-the-art hardware HEVC encoder present on newer Nvidia GPUs. 
 \section{RATS Implementation} \label{rats}
 To get around the lack of tiling in NVENC, we divide the RATS pipeline into an encoding component, in which a raw video frame is manipulated and converted into low- and high-quality bitstreams; and a stitching component, in which slices from these bitstreams are converted to tiles and arranged in the desired manner.
 
+Details on the installation and usage of RATS, as well as an overview of the source code, can be found in the git repository \footnote{https://github.com/ballardt/nvenc-live}.
+
 \subsection{Encoding}
 
 NVENC cannot perform tiling, but it is capable of slicing videos in one of several ways based on the \texttt{sliceMode} parameter. When \texttt{sliceMode=3}, each frame is cut into \texttt{sliceModeData}=$n$ equal slices. Slices do not permit vertical boundaries to be specified, but the edges of the image act as natural slice boundaries, allowing us to effectively create tile columns by placing the desired column edges at the image borders. We therefore manipulate the input images by vertically cutting them into $n$ chunks of equal size and stacking these chunks on top of one another, then setting \texttt{sliceModeData=}$k \cdot n$ for some $k \in \mathbb{N}$, so that the slice boundaries align with the top and bottom boundaries of the original image. This process is demonstrated for $n=3$ and $k=1$ in Fig. \ref{fig:pipeline}. Note that $k$ corresponds to the desired number of tile rows, and the CTU height of the image must be divisible by $k$. Similarly, $n$ corresponds to the desired number of tile columns, and the CTU width of the image must be divisible by $n$ to keep stacked columns the same width. We thus crop the input video if necessary, but one could also resize the input video or simply reject it. 
@@ -50,6 +52,7 @@ The stitching process uses the Boost C++ dynamic\_bitstream API, which allows on
 
 \setcounter{figure}{1}
 \begin{table}
+	\label{tab:stitch}
 	\begin{tabularx}{\columnwidth}{llr}
 		\toprule
 		NAL Type & Field & Value \\
@@ -69,22 +72,19 @@ The stitching process uses the Boost C++ dynamic\_bitstream API, which allows on
 		\bottomrule
 	\end{tabularx}
 	\caption{Table containing all NAL header fields requiring modification. Required literal bit values are provided when necessary. Note that \texttt{num\_entry\_point\_offsets} is an Exponential Golomb-coded number, so a literal bit value of \texttt{1} corresponds to a logical value of 0.}
-	\label{tab:stitch}
 \end{table}
 \renewcommand{\figurename}{Fig.}
 \setcounter{figure}{1}
 
 \subsection{Hardware Limitations}
 
-TODO: maybe add citation
+In this work, we use the Nvidia GTX 1080Ti, a powerful consumer-grade GPU. As demonstrated in Section~\ref{eval}, this GPU meets our real-time speed requirements; however, there are two limitations that we must consider.
 
-In this work, we use the NVIDIA GTX 1080 Ti, a state-of-the-art consumer-grade GPU. We chose this GPU because it is powerful, widely available, and inexpensive enough for general consumers. As demonstrated in Section 5, this GPU is capable of encoding video streams much faster than our real-time target. There are, however, two limitations that we must consider.
+First, the maximum input image size is $8192\times8192$ pixels. Because we stack tile columns before encoding, this limit is quickly reached. To get around this, we divide the image into sub-images whose stacked columns do not exceed $8192$ pixels, and encode each of these sub-images independently at either quality. More tile columns thus require additional encodes, but NVENC is fast enough to keep the total encoding time well below our target.
 
-First, the maximum input image size is $8192\times8192$ pixels. Most 360-degree videos are only $3840\times2048$ pixels, but recall that we stack tile columns before sending the image to the GPU. The maximum limit is therefore reached with only a few stacked columns. To get around this, we divide the image into multiple sub-images whose columns do not exceed $8192$ pixels when stacked, and encode each of these sub-images independently, once at either bitrate. Specifying more tile columns will thus require additional encodes for each frame, but, fortunately, the GPU encoder is fast enough to keep the total encode time well below the real-time target for realistic tile configurations.
+We must make a few small changes to the stitching process to handle sub-images. Note that the position of each tile within a sub-image may change in the final image. For example, consider a video with 6 tile columns. From left to right, if the first 4 columns constitute one sub-image and the final 2 columns constitute another, the CTU offsets of all tiles except those in the first row of the first sub-image will change, and the number of required bits to record the offset will change as well. Furthermore, the first tile in the second sub-image will not contain a CTU offset, so this value must be inserted.
 
-We must make a few small changes to the stitching process to handle sub-images. Note that the location of each tile within a sub-image may not correspond to its location in the final stitched image. For example, consider a video with 6 tile columns. From left to right, let us say the first 4 columns constitute one sub-image, and the final 2 columns constitute another. In this case, the CTU offsets of the first tile row in the first sub-image will remain the same, but the offsets of all other tiles will change in the final image. Because the final image size is different from the size of either sub-image, the number of bits used to encode the CTU offset will change as well. Furthermore, the first tile in the second sub-image will not contain a CTU offset in the NAL header, requiring this field to be inserted at the correct location. Finally, multiple similar parameter sets will be produced, so we keep one and discard the others. Choosing which one to keep is arbitrary, as differing important fields will be modified during the stitching process.
-
-Second, as detailed in Section 2, the GPU driver does not allow more than 2 simultaneous context configurations during the encoding process. Each sub-image at either bitrate requires an independent context configuration, i.e. an instance of AVCodecContext. Each sub-image at either quality requires its own context, so this limitation would normally prevent us from making use of the sub-image technique detailed above. Fortunately, it is possible to remove the 2 context limit by sending a particular bytestream to the GPU. A script to do so is provided in nvidia-patch [CITE, or footnote], which we used for this work.
+Second, as detailed in Section 2, the GPU driver does not allow more than 2 simultaneous context configurations during the encoding process, which would normally prevent the use of sub-images. Fortunately, it is possible to remove the 2 context limit by sending a particular bytestream to the GPU. A script to do so is provided in nvidia-patch \footnote{https://github.com/keylase/nvidia-patch}, which we used for this demo.
 
 \begin{figure}[t]
 	\includegraphics[width=\columnwidth]{figures/times_v1.pdf}
@@ -92,36 +92,23 @@ Second, as detailed in Section 2, the GPU driver does not allow more than 2 simu
 	\label{fig:time}
 \end{figure}
 
-\subsection{Installing and Using RATS}
-
-TODO: include more details if we have room
-
-RATS was developed and evaluated on Ubuntu 18.04, using CUDA 9.2, FFmpeg 3.4, and Boost 1.64. We use a modified version of FFmpeg which sets \texttt{sliceModeData=3} and adds a new field, \texttt{numSlices}, to \texttt{AVCodecContext} in order to specify the tile configuration at run-time. FFmpeg must be configured to use CUDA and produce static libraries during compilation.
-
-Details on the installation and usage of RATS, as well as an overview of the source code, can be found in the git repository \footnote{https://github.com/ballardt/nvenc-live}.
-
-\section{RATS in an infrastructure} \label{infra}
+\section{RATS in an Infrastructure} \label{infra}
 
 The main contribution of RATS to the state-of-the-art is the efficient and accessible
-tiling of videos with HD quality and better on a single computer equipped with a
-suitable generally programmable consumer-grade GPU.
-We circumvent certain limitations of the GPU and are thereby able to generate videos
-that are compliant with the advanced tiling scheme of HEVC.
+tiling of UHD videos on a single computer equipped with a consumer-grade GPU. We circumvent certain limitations of the GPU and are thereby able to generate videos compliant with the advanced tiling scheme of HEVC.
 
 In the demo, we present
-a variation of our solution that stitches videos comprised of tiles of various
-qualities before delivery to an end-system.
-This is not the only possible approach, and it is actually somewhat more complex
-than the creation of distinct video streams for each individual tile.
+a variation of our solution that stitches tiles of various
+qualities together before delivery to an end-system.
+This is not the only possible approach, and is actually somewhat more complex
+than eliminating the stitching component and simply creating distinct video streams for each tile instead. 
 DASH provides the extension DASH-SRD (spatial relationship description), which
-allows a client to access tile stream individually, synchronize them and make
-independent quality choices for each of them. Providing the appropriate data and
-metadata for this approach is actually a simplification to the approach that we
+allows a client to access tile streams individually, synchronize them, and make
+independent quality choices for each (TODO cite). Providing the appropriate data and
+metadata for this approach is actually a simplification of the one we
 demonstrate in this paper.
 
-The remaining infrastructure for delivering the encoded video is entirely comprised
-of open-source software where we make use of HTTP adaptive streaming.
-The packages that have been used include NGinx\footnote{https://github.com/nginx/nginx.git}, Kaltura nginx-vod-module\footnote{https://github.com/kaltura/nginx-vod-module.git} and MediaElement.js\footnote{https://www.mediaelementjs.com/}.
+The remaining infrastructure used to deliver the encoded video via HTTP adaptive streaming is entirely comprised of open-source software, including Nginx\footnote{https://github.com/nginx/nginx}, Kaltura nginx-vod-module\footnote{https://github.com/kaltura/nginx-vod-module} and MediaElement.js\footnote{https://www.mediaelementjs.com/}.
 
 %\begin{itemize}
 %\item NGinx: available from \url{https://github.com/nginx/nginx.git}
@@ -155,26 +142,9 @@ TODO: do other jumps originate entirely in NVENC?
 	\label{fig:size}
 \end{figure}
 
-
-
-\section{Future Work}
-
-TODO: Merge with section 4, then remove future work
-
-In this work, we have focused on the problem of encoding small independent regions of a video at multiple bitrates in real-time, as this is the primary technical challenge involved in 360-degree or 4K ABR livestreaming. However, in the interest of developing a fully-realized demonstration, we intend to place this work within a web-based streaming platform where clients could watch a live video from, e.g., the web browser on their phone. There exist an abundance of tools to set up a DASH-like streaming platform for H.264, but our options are more limited with HEVC.
-
-One potential implementation may be as follows: For each frame, the stitching process is performed multiple times with different bitrate configurations requiring different network capabilities. For example, one configuration may contain only a few high-quality tiles in very important regions, while another may use high-quality tiles almost everywhere. Important regions may be found automatically via [CITE]. These frames are placed in short video segments such that the first frame is always an I-frame. Kaltura, an open source video-on-demand platform, is used to manage these segments, and clients can stream them via MediaElementJS. This solution is analogous to DASH, using the server to store a few pre-rendered qualities in short chunks which can be requested by the client.
-
-It may be desirable to allow the client to choose their bitrate at the tile level. For example, if a user looks in a particular direction, we may wish to increase the quality only in that area. However, this would require either that the server perform custom stitching for each client, or that the stitching component occurs in the browser on the client side. In the first case, the server would quickly be overloaded; in the second, stitching would take much longer than real-time. A better alternative may be to group users into categories based on where they are looking and produce video segments for each category. All users will be watching the stream at the same time and are likely to follow the most interesting parts of the image, so this may naturally produce videos in which important features are of a high quality. We intend to explore several of these options in a future work.
-
 \section{Conclusion} \label{concl}
 
-TODO
-
-\section{Notes, to be deleted}
-Sharing CUDA contexts (not used): https://devtalk.nvidia.com/default/topic/1031189/video-codec-sdk/sharing-the-same-cuda-context-for-encoding-nvenc-and-decoding-nvdec-/
-
-NVIDIA patch (used): https://github.com/keylase/nvidia-patch
+In this work, we demonstrated an adaptive live video platform capable of encoding tiled $360\,^{\circ}$ videos at multiple bitrates using an accessible consumer-grade GPU. By working closely with NVENCODE and the HEVC standard, we overcame limitations that had previously rendered hardware encoders useless in generating adaptive tile-based video. Furthermore, we have made our code open source and provided a demonstration of an HTTP video streaming service based on RATS.
 
 \begin{figure}[t]
 	\includegraphics[width=\columnwidth]{figures/times_size_combined_v1.pdf}
