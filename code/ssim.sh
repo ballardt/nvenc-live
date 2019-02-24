@@ -14,7 +14,7 @@ get_dir_ssim_scores () {
         tileConfig=$(basename $video .hevc)
         echo "$video"
 
-        vidSize=$(ffprobe ffprobe -v error -show_entries stream=width,height -of default=noprint_wrappers=1 $video)
+        vidSize=$(ffprobe -v error -show_entries stream=width,height -of default=noprint_wrappers=1 $video)
         echo "$vidSize"
         
         if [[ $vidSize == "test" ]]; then
