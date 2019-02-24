@@ -16,6 +16,6 @@ get_dir_ssim_scores () {
 }
 
 # Get scores for each quality configuration
-get_dir_ssim_scores "test_high" "high"
-get_dir_ssim_scores "test_low" "low"
-get_dir_ssim_scores "test_mixed" "mixed"
+get_dir_ssim_scores "time_high" "high"
+get_dir_ssim_scores "time_low" "low"
+get_dir_ssim_scores "time_mixed" "mixed"
