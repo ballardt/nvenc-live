@@ -11,7 +11,9 @@ get_dir_ssim_scores () {
 	echo "Quality config: $QUAL"
 	for videoPath in $TEST_DIR/*.hevc; do
 		video=$(basename $videoPath)
-		ffmpeg -i $videoPath -s:v $RESOLUTION -i $REF_VIDEO -lavfi "ssim" -f null -
+        tileConfig=$(basename $video .txt)
+        echo "$video"
+		ffmpeg -i $videoPath -s:v $RESOLUTION -i $REF_VIDEO -lavfi "ssim" -f null - 2>&1 | grep Parsed_ssim | awk '{print "$tileConfig,"substr($8, 5)}' >> ssim_$QUAL.txt
 	done
 }
 
