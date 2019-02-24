@@ -34,7 +34,7 @@ NVENC cannot perform tiling, but it is capable of slicing videos in one of sever
 
 In a YUV420p video, each frame consists of a luminance component followed by two chrominance components. The image transformation is performed on each component via memcpy. For each desired tile column, we begin at the first pixel row and move down, calling memcpy with a length equal to the width of a tile column on each pixel row and placing the contents in a new array, before moving on to the next tile column once we hit the bottom of the image. The result of this process will be an image in which the desired tile columns are stacked on top of one another.
 
-To interact with NVENC, we use the libavcodec API provided by FFmpeg \footnote{https://www.ffmpeg.org}. The high- and low-bitrate configurations are distinct instances of the AVCodecContext struct, which are initialized before the encoding process begins. During the process, each transformed frame is passed to NVENC twice, once for either bitrate, to obtain the low- and high-quality bitstreams.
+To interact with NVENC, we use a custom version of the libavcodec API provided by FFmpeg \footnote{https://www.ffmpeg.org}. The high- and low-bitrate configurations are distinct instances of the AVCodecContext struct, which are initialized before the encoding process begins. During the process, each transformed frame is passed to NVENC twice, once for either bitrate, to obtain the low- and high-quality bitstreams.
 
 \subsection{Stitching}
 
@@ -119,10 +119,9 @@ To evaluate RATS, we analyze its performance across multiple tile configurations
 
 Examining Figs. \ref{fig:time} and \ref{fig:size}, we see that the number of tile columns is the primary factor affecting encoder performance. Intuitively, this makes sense; the number of columns dictates the number of sub-images necessary, each of which requires two more NVENC encodes per frame, multiple stitching operations, and column stacking of the source image. In contrast, tile rows are simply required to divide evenly along CTU borders, incurring minor computation costs only when they are misaligned and the source image must be cropped.
 
-Fig. \ref{fig:time} confirms that RATS easily satisfies our real-time requirement, finishing the encode and stitch process in one-third of the total video time in the worst case tested. There are several notable features. The first is the jump between 1 and 2 tile columns as the source image requires transformation and the stitcher begins to make more significant bitstream modifications. Another is the jump between 4 and 5 tile columns as sub-images are introduced. Interestingly, the extra time at 7 columns occurs entirely within NVENC. This unfortunately obfuscates its origin, but it may be due to the CTU width of the uncropped image not being divisible by 7.
+Fig. \ref{fig:time} confirms that RATS easily satisfies our real-time requirement, finishing the encode and stitch process in one-third of the total video time in the worst case tested. There are several notable points in the figure. The first is the jump between 1 and 2 tile columns as the source image requires transformation and the stitcher begins to make more significant bitstream modifications. Another is the jump between 4 and 5 tile columns as sub-images are introduced. The gradual increase thenceforth occurs entirely within NVENC, unfortunately obfuscating its origin, but is likely a byproduct of the in-loop deblocking filter becoming less able to process tile boundaries in parallel as the image becomes taller and slimmer. The extra time at 7 columns similarly occurs within NVENC, and may be due to the CTU width of the uncropped image not being divisible by 7.
 
-TODO: discuss fig. \ref{fig:size}
-TODO: do other jumps originate entirely in NVENC?
+In Fig. \ref{fig:size}, we see that the number of columns has a drastic effect on the output file size once sub-images are introduced. Decrease in coding efficiency is to be expected with smaller tiles due to intra-picture prediction and entropy encoding, but it is interesting that this only occurs with sub-images and is not affected by the number of tile rows. This may also result from the in-loop deblocking filter, or could simply be a byproduct of the encoding algorithms used by NVENC.
 
 %\begin{figure}[t]
 %	% \includegraphics[width=\columnwidth]{figures/hevc_eval_qual.png}
