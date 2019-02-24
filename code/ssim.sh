@@ -13,7 +13,14 @@ get_dir_ssim_scores () {
 		video=$(basename $videoPath)
         tileConfig=$(basename $video .hevc)
         echo "$video"
-		ffmpeg -i $videoPath -s:v $RESOLUTION -i $REF_VIDEO -lavfi "ssim" -f null - 2>&1 | grep Parsed_ssim | awk -v tileConfig="$tileConfig" -v qualConfig="$QUAL" '{print qualConfig "," tileConfig "," substr($8, 5)}' >> ssim_eval.csv
+
+        vidSize=$(ffprobe ffprobe -v error -show_entries stream=width,height -of default=noprint_wrappers=1 $video)
+        echo "$vidSize"
+        
+        if [[ $vidSize == "test" ]]; then
+            echo "what"
+        fi
+		#ffmpeg -i $videoPath -s:v $RESOLUTION -i $REF_VIDEO -lavfi "ssim" -f null - 2>&1 | grep Parsed_ssim | awk -v tileConfig="$tileConfig" -v qualConfig="$QUAL" '{print qualConfig "," tileConfig "," substr($8, 5)}' >> ssim_eval.csv
 	done
 }
 
