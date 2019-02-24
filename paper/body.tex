@@ -1,7 +1,7 @@
 
 \section{Introduction} \label{intro}
 
-TODO: add citations
+TODO: add citations?
 
 Hardware HEVC encoders have recently appeared on consumer-grade GPUs, opening the door to mass $360\,^{\circ}$ video live streaming. Traditional methods of adaptive bitrate (ABR) streaming, however, do not work on these ultra-high resolution videos because the bitstream will either be too large for continuous playback or of too low a quality to be enjoyable. A body of work on tile-based ABR streaming for UHD video has recently appeared in which the quality requested for each section of a video corresponds roughly to how interesting it is, allowing end-users to view the most important parts of a video in high-quality without stalling. This is straightforward for pre-rendered videos, but is more complicated in a live streaming scenario because each quality requires another encode, introducing some delay in the availability of each new segment. Furthermore, tiling is not supported by existing hardware encoders. One can try to get around this by feeding each tile to the encoder as a separate video and stitching them together afterwards, but this requires cropping once for each desired tile in the image on every frame, then swapping out encoder contexts and encoding each tile separately, introducing considerable overhead.
 
@@ -14,11 +14,12 @@ The rest of this paper is organized as follows. In Section \ref{hevc}, we provid
 	\centering
 	\includegraphics[width=0.8\textwidth]{figures/Streaming_scenario_v3.pdf}
 	\caption{Adaptive $360\,^{\circ}$ Live Streaming: In this demo we show hardware encoding that allows us to stitch single tiles of the $360\,^{\circ}$ video in different quality levels (see pipeline). The lower part of the figure shows the demo setup in a streaming infrastructure that makes use of HTTP adaptive streaming.}
+	\label{fig:pipeline}
 \end{figure*}
 
 \section{HEVC and NVENC} \label{hevc}
 
-TODO: revise this, add a couple citations
+TODO: add noted citations
 
 HEVC, also known as H.265, is a modern video compression standard capable of dramatically shrinking video file size without sacrificing quality. Encoding an HEVC video is a computationally expensive process, and the most costly operations, such as motion estimation, are not easily parallelized (TODO cite some reference). Instead, encoders divide each frame of the video into independent regions and encode them separately, joining their edges to form the full image during playback. Two versions of this concept, slices and tiles, exist within the HEVC standard. Functionally, they are identical; however, slices are limited to chunking the video into wide strips, while tiles can divide a video into rectangular CTU-based areas of any size. While tiles are supported by most decoders, very few encoders allow for it, all of which are software encoders far too slow to operate in real-time.
 
@@ -31,77 +32,42 @@ To get around the lack of tiling in NVENC, we divide the RATS pipeline into an e
 
 \subsection{Encoding}
 
-NVENC cannot perform tiling, but it is capable of slicing videos in one of several ways based on the \texttt{sliceMode} parameter. When \texttt{sliceMode=3}, each frame is cut into \texttt{sliceModeData}=$n$ equal slices. Slices do not permit vertical boundaries to be specified, but the edges of the image act as natural slice boundaries, allowing us to effectively create tile columns by placing the desired column edges at the image borders. We therefore manipulate the input images by vertically cutting them into $n$ chunks of equal size and stacking these chunks on top of one another, then setting \texttt{sliceModeData=}$k \cdot n$ for some $k \in \mathbb{N}$, so that the slice boundaries align with the top and bottom boundaries of the original image. Note that $k$ corresponds to the desired number of tile rows, and the CTU height of the image must be divisible by $k$. Similarly, $n$ corresponds to the desired number of tile columns, and the CTU width of the image must be divisible by $n$ to keep stacked columns the same width. We thus crop the input video if necessary, but one could also resize the input video or simply reject it. 
+NVENC cannot perform tiling, but it is capable of slicing videos in one of several ways based on the \texttt{sliceMode} parameter. When \texttt{sliceMode=3}, each frame is cut into \texttt{sliceModeData}=$n$ equal slices. Slices do not permit vertical boundaries to be specified, but the edges of the image act as natural slice boundaries, allowing us to effectively create tile columns by placing the desired column edges at the image borders. We therefore manipulate the input images by vertically cutting them into $n$ chunks of equal size and stacking these chunks on top of one another, then setting \texttt{sliceModeData=}$k \cdot n$ for some $k \in \mathbb{N}$, so that the slice boundaries align with the top and bottom boundaries of the original image. This process is demonstrated for $n=3$ and $k=1$ in Fig. \ref{fig:pipeline}. Note that $k$ corresponds to the desired number of tile rows, and the CTU height of the image must be divisible by $k$. Similarly, $n$ corresponds to the desired number of tile columns, and the CTU width of the image must be divisible by $n$ to keep stacked columns the same width. We thus crop the input video if necessary, but one could also resize the input video or simply reject it. 
 
 In a YUV420p video, each frame consists of a luminance component followed by two chrominance components. The image transformation is performed on each component via memcpy. For each desired tile column, we begin at the first pixel row and move down, calling memcpy with a length equal to the width of a tile column on each pixel row and placing the contents in a new array, before moving on to the next tile column once we hit the bottom of the image. The result of this process will be an image in which the desired tile columns are stacked on top of one another.
 
-To interact with NVENC, we use the libavcodec API provided by FFmpeg. The high- and low-bitrate configurations are distinct instances of the AVCodecContext struct, which are initialized before the encoding process begins. During the process, each transformed frame is passed to NVENC twice, once for either bitrate, to obtain the low- and high-quality bitstreams.
+To interact with NVENC, we use the libavcodec API provided by FFmpeg (TODO cite). The high- and low-bitrate configurations are distinct instances of the AVCodecContext struct, which are initialized before the encoding process begins. During the process, each transformed frame is passed to NVENC twice, once for either bitrate, to obtain the low- and high-quality bitstreams.
 
 \subsection{Stitching}
 
-TODO: revise
+The bitstreams from the encoding step will contain $(k \cdot n)+1$ NAL units per frame, one for each tile and a single SEI at the end, but these will still be arranged in a vertical stack. To pick tiles from either quality and place them in the final image, we must modify several fields in the NAL headers. Table ~\ref{tab:stitch} lists all such fields. Two additional changes are necessary on behalf of emulation prevention bytes and byte alignment. NAL borders are represented by the byte-aligned sequence \texttt{0x000001}. To prevent this sequence from occurring by chance within a NAL, the byte-aligned sequence \texttt{0x03}, referred to as the emulation prevention byte, may be inserted after any byte-aligned \texttt{0x0000} which is not part of a NAL border. The emulation prevention byte does not otherwise impact the NAL parsing process, and decoders will simply skip over it when encountered. 
 
-The output bitstream from the encoder will typically contain $(k \cdot n)+1$ NAL units per frame, one for each tile and a single SEI at the end.
+If the stitching process modifies the number of bits in the NAL header, e.g by inserting a new field or changing an unsigned Exponential Golomb coded value, any emulation prevention bytes appearing after the point of change will likely cease to be byte-aligned. The decoder will then consider these bits to have semantic value, resulting in a corrupt or incorrect header. We must also ensure that the stitching process does not introduce any new \texttt{0x0000} sequences without a trailing emulation prevention byte. To tackle both of these issues at once, we discard all emulation prevention bytes in the original NAL header before making any modifications, then check for byte-aligned \texttt{0x0000} sequences afterwards, inserting emulation prevention bytes as necessary. This procedure is not performed on NAL data because it is not modified, and byte alignment will be performed at the end of the header.
 
-The bitstreams resulting from the encoding process contain the independently-decodable slices which will function as our tiles, but they will still be stacked from top-to-bottom. Fortunately, we must only modify a few fields in the NAL headers to convert the slices to tiles and arrange them in the desired configuration. Table ~\ref{tab:stitch} lists all such fields. Note that within an HEVC bitstream, \textit{NAL} and \textit{slice} are equivalent terms which may be used interchangeably. To avoid confusion, we will retain the use of "slice" to refer to an independently-decodable horizontal strip of an image.
+After the last semantic bit in a NAL header or body, byte alignment is performed by appending a \texttt{1} followed by as many \texttt{0}s necessary to complete the byte. As is the case with emulation prevention bytes, if the size of the NAL header changes during modification, we will likely have an incorrect number of trailing \texttt{0}s. To redo the byte alignment, we find the last \texttt{1} in the original NAL component and remove it and everything after it, effectively undoing the previous byte alignment. We then perform byte alignment after our modifications have been made.
 
-In addition to modifying those values listed in Table ~\ref{tab:stitch}, there are two more changes necessary on behalf of emulation prevention bytes and byte alignment. NAL borders are represented by the byte-aligned sequence \texttt{0x000001}. To prevent this sequence from occurring by chance within a NAL, the byte-aligned sequence \texttt{0x03}, referred to as the emulation prevention byte, may be inserted after any \texttt{0x0000} which is not part of a NAL border. The emulation prevention byte has no other meaning and does not otherwise impact the NAL parsing process.
+The stitching process uses the Boost C++ dynamic\_bitstream API, which allows one to read bytes into a vector of bits, manipulate these bits, then convert the bit vector back into raw bytes. The high- and low-bitrate configurations are identical except for the specified bitrate, so the output from NVENC is highly predictable. Navigating to the right spot in the bitstream and making our changes is thus a straightforward process.
 
-If the stitching process modifies the number of bits in the NAL header by, e.g., inserting a new field or changing the value of an unsigned Exponential Golomb code, any emulation prevention bytes appearing after the point of change will likely cease to be byte-aligned. The decoder will then consider these bits to have semantic value, resulting in a corrupt or incorrect header. We must also ensure that the stitching process does not introduce any new \texttt{0x0000} sequences without a trailing emulation prevention byte. To tackle both of these issues at once, we discard any emulation prevention bytes we encounter in the original NAL and check for any \texttt{0x0000} sequences after our changes have been made. No such concern is necessary for the NAL data because this data will be byte-aligned at the end of the header.
-
-Byte alignment occurs at the end of a NAL header or NAL data. After the last semantic bit, a \texttt{1} is appended to the NAL section, followed by as many \texttt{0}s as necessary to complete the byte. As is the case with emulation prevention bytes, if the size of the NAL header changes during modification, we will likely have an incorrect number of trailing \texttt{0}s. To redo the byte alignment, we find the last \texttt{1} in the original NAL and remove it and everything after it, effectively undoing the previous byte alignment. We then perform byte alignment after our modifications have been made.
-
-The stitching process is performed with the Boost C++ dynamic\_bitstream API, which allows one to read bytes into a vector of bits, manipulate these bits, then convert the bit vector into raw bytes. The high- and low-bitrate configurations are identical except for the specified bitrate, and the resulting NAL headers do not change based on, e.g., content, so the output from NVENC is highly predictable. Therefore, navigating to the right spot in the bitstream and making our changes is a straightforward process.
-
-%%\renewcommand{\figurename}{Tab.}
-%%\setcounter{figure}{1}
-%%\begin{table*}[t]
-%%	\centering
-%%	\begin{tabular}{llp{3in}r}
-%%		\toprule
-%%		NAL Type & Field & Description & Fixed value \\
-%%		\midrule
-%%		\multirow{2}{*}{SPS} & \texttt{pic\_width\_in\_luma\_samples} & Pixel width of the final video. & \\ \cmidrule[0.5pt]{2-4}
-%%		& \texttt{pic\_hidth\_in\_luma\_samples} & Pixel height of the final video. & \\
-%%		\midrule[1pt]
-%%		\multirow{5}{*}[-5em]{PPS} & \texttt{tiles\_enabled\_flag} & Converts slices to tiles and adds several relevant fields to the bitstream syntax. & \texttt{1} \\ \cmidrule[0.5pt]{2-4}
-%%		& \texttt{num\_tile\_columns\_minus1} & Number of tile colums minus 1. & \\ \cmidrule[0.5pt]{2-4}
-%%		& \texttt{num\_tile\_rows\_minus1} & Number of tile rows minus 1. & \\ \cmidrule[0.5pt]{2-4}
-%%		& \texttt{uniform\_spacing\_flag} & Whether tiles are evenly sized. If \texttt{0}, manual tile boundaries must be specified. & \texttt{1} \\ \cmidrule[0.5pt]{2-4}
-%%		& \texttt{loop\_filter\_across\_tiles\_enabled\_flag} & Whether in-loop filtering should be performed across tile boundaries. This is optional, and may be desired if there is less of a difference between the high and low bitrates. & \texttt{1} \\
-%%		\midrule[1pt]
-%%		\multirow{4}{*}[-6em]{\shortstack{I-slice, \\P-slice}} & \texttt{first\_slice\_segment\_in\_pic\_flag} & Should be \texttt{1} in the top-leftmost tile, and \texttt{0} in all other tiles. If \texttt{0}, the slice segment address must be specified. & \\ \cmidrule[0.5pt]{2-4}
-%%		& \texttt{slice\_segment\_address} & The address of the top-leftmost CTU in this tile, beginning from 0 at the top-leftmost CTU in the entire image, and incrementing across the image, moving down and continuing at the end of the row.& \\ \cmidrule[0.5pt]{2-4}
-%%		& \texttt{slice\_loop\_filter\_across\_slices\_enabled\_flag} & Similar to the loop filter flag in the PPS, but specifically concerned with in-loop filtering across the left and top boundaries of the tile. & \texttt{1} \\ \cmidrule[0.5pt]{2-4}
-%%		& \texttt{num\_entry\_point\_offsets} & Used to treat \texttt{emulation\_prevention\_three\_byte} as part of the tile data, which is not desired here. & \texttt{1} \\
-%%		\bottomrule
-%%	\end{tabular}
-%%	\caption{Table containing all NAL header modifications. The "Fixed value" column contains the bit values of hard-coded fields, such as important flags. Missing values indicate that the value may vary depending on the video and parameters used. In this case, all such values would be encoded using unsigned Expontential-Golomb.}
-%%	\label{tab:stitch}
-%%\end{table*}
-%%\renewcommand{\figurename}{Fig.}
-%%\setcounter{figure}{2}
-\renewcommand{\figurename}{Tab.}
 \setcounter{figure}{1}
 \begin{table}
-	\begin{tabular}{llr}
+	\begin{tabularx}{\columnwidth}{llr}
 		\toprule
 		NAL Type & Field & Value \\
 		\midrule
-		\multirow{2}{*}[-.3em]{SPS} & \texttt{pic\_width\_in\_luma\_samples} & \\ \cmidrule[0.5pt]{2-3}
-		& \texttt{pic\_height\_in\_luma\_samples} & \\
-		\midrule[1pt]
-		\multirow{4}{*}[-1em]{PPS} & \texttt{tiles\_enabled\_flag} & \texttt{1} \\ \cmidrule[0.5pt]{2-3}
-		& \texttt{num\_tile\_columns\_minus1} & \\ \cmidrule[0.5pt]{2-3}
-		& \texttt{num\_tile\_rows\_minus1} & \\ \cmidrule[0.5pt]{2-3}
-		& \texttt{uniform\_spacing\_flag} & \texttt{1} \\
-		\midrule[1pt]
-		\multirow{3}{*}[-1em]{\shortstack{I-slice, \\P-slice}} & \texttt{first\_slice\_segment\_in\_pic\_flag} & \\ \cmidrule[0.5pt]{2-3}
-		& \texttt{slice\_segment\_address} & \\ \cmidrule[0.5pt]{2-3}
-		\cmidrule[0.5pt]{2-3}
-		& \texttt{num\_entry\_point\_offsets} & \texttt{1} \\
+		%\multirow{2}{*}[-.3em]{SPS} & \texttt{pic\_width\_in\_luma\_samples} & & \\ 
+		SPS & \texttt{pic\_width\_in\_luma\_samples} & \\
+		 & \texttt{pic\_height\_in\_luma\_samples} &  \\
+		\midrule
+		PPS & \texttt{tiles\_enabled\_flag} & \texttt{1}  \\
+		& \texttt{num\_tile\_columns\_minus1} &  \\ 
+		& \texttt{num\_tile\_rows\_minus1} &  \\
+		& \texttt{uniform\_spacing\_flag} & \texttt{1}  \\
+		\midrule
+		I-frame, & \texttt{first\_slice\_segment\_in\_pic\_flag} & \\
+		P-frame & \texttt{slice\_segment\_address} &  \\
+		& \texttt{num\_entry\_point\_offsets} & \texttt{1}  \\
 		\bottomrule
-	\end{tabular}
+	\end{tabularx}
 	\caption{Table containing all NAL header fields requiring modification. Required literal bit values are provided when necessary. Note that \texttt{num\_entry\_point\_offsets} is an Exponential Golomb-coded number, so a literal bit value of \texttt{1} corresponds to a logical value of 0.}
 	\label{tab:stitch}
 \end{table}
@@ -112,9 +78,9 @@ The stitching process is performed with the Boost C++ dynamic\_bitstream API, wh
 
 TODO: maybe add citation
 
-In this work, we use the NVIDIA GTX 1080 Ti, a state-of-the-art consumer-grade GPU. We chose this GPU because it is powerful, widely available, and inexpensive enough for the general public. As demonstrated in Section 5, this GPU is capable of encoding video streams much faster than our real-time target. There are, however, two limitations placed upon this GPU that we must consider.
+In this work, we use the NVIDIA GTX 1080 Ti, a state-of-the-art consumer-grade GPU. We chose this GPU because it is powerful, widely available, and inexpensive enough for general consumers. As demonstrated in Section 5, this GPU is capable of encoding video streams much faster than our real-time target. There are, however, two limitations that we must consider.
 
-First, the maximum input image size is $8192\times8192$ pixels. Most 360-degree videos are only $3840\times2048$ pixels, but recall that we stack tile columns on top of one another before sending the image to the GPU. The maximum limit is therefore reached with only a few tile columns, forcing us to use wide tile columns which may not be granular enough for ABR streaming. To get around this, we divide the image into multiple sub-images whose columns do not exceed $8192$ pixels when stacked, and encode each of these sub-images independently, once at either bitrate. Specifying more tile columns will thus require additional encodes for each frame, but, fortunately, the GPU encoder is fast enough to keep the total encode time well below the real-time target for realistic tile configurations.
+First, the maximum input image size is $8192\times8192$ pixels. Most 360-degree videos are only $3840\times2048$ pixels, but recall that we stack tile columns before sending the image to the GPU. The maximum limit is therefore reached with only a few stacked columns. To get around this, we divide the image into multiple sub-images whose columns do not exceed $8192$ pixels when stacked, and encode each of these sub-images independently, once at either bitrate. Specifying more tile columns will thus require additional encodes for each frame, but, fortunately, the GPU encoder is fast enough to keep the total encode time well below the real-time target for realistic tile configurations.
 
 We must make a few small changes to the stitching process to handle sub-images. Note that the location of each tile within a sub-image may not correspond to its location in the final stitched image. For example, consider a video with 6 tile columns. From left to right, let us say the first 4 columns constitute one sub-image, and the final 2 columns constitute another. In this case, the CTU offsets of the first tile row in the first sub-image will remain the same, but the offsets of all other tiles will change in the final image. Because the final image size is different from the size of either sub-image, the number of bits used to encode the CTU offset will change as well. Furthermore, the first tile in the second sub-image will not contain a CTU offset in the NAL header, requiring this field to be inserted at the correct location. Finally, multiple similar parameter sets will be produced, so we keep one and discard the others. Choosing which one to keep is arbitrary, as differing important fields will be modified during the stitching process.
 
