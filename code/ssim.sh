@@ -1,35 +1,21 @@
 #!/bin/bash
 
-# Usage:
-#
-# If the videos must first be converted to PNGs:
-#   $ ./ssim.sh --generate-pngs refvideo.mp4 testvideo.mp4
-#
-# If the PNG folders already exist:
-#   $ ./ssim.sh
+REF_VIDEO="out.yuv"
+RESOLUTION="3840x2048"
 
-REF_DIR='./ref_pngs'
-TEST_DIR='./test_pngs'
-NUM_DECIMALS=7
+# First arg: directory
+# Second arg: quality (to label the results afterwards)
+get_dir_ssim_scores () {
+	TEST_DIR=$1
+	QUAL=$2
+	echo "Quality config: $QUAL"
+	for videoPath in $TEST_DIR/*.hevc; do
+		video=$(basename $videoPath)
+		ffmpeg -i $videoPath -s:v $RESOLUTION -i $REF_VIDEO -lavfi "ssim" -f null -
+	done
+}
 
-if [[ $* == *--generate-pngs* ]]; then
-	REF_VIDEO=$2
-	TEST_VIDEO=$3
-	rm -rf $REF_DIR
-	rm -rf $TEST_DIR
-	mkdir $REF_DIR
-	mkdir $TEST_DIR
-	ffmpeg -i $REF_VIDEO $REF_DIR/frame%04d.png
-	ffmpeg -i $TEST_VIDEO $TEST_DIR/frame%04d.png
-fi
-
-NUM_FRAMES=$(ls $REF_DIR/*.png -1 | wc -l)
-ssimTotal=0
-
-for frame in $REF_DIR/*.png; do
-	imgName=$(basename $frame)
-	ssimFrame=$(pyssim $REF_DIR/$imgName $TEST_DIR/$imgName)
-	ssimTotal=$(echo "scale=$NUM_DECIMALS; $ssimTotal + $ssimFrame" | bc)
-done
-
-echo "scale=$NUM_DECIMALS; $ssimTotal / $NUM_FRAMES" | bc
+# Get scores for each quality configuration
+get_dir_ssim_scores "test_high" "high"
+get_dir_ssim_scores "test_low" "low"
+get_dir_ssim_scores "test_mixed" "mixed"
