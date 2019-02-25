@@ -7,7 +7,7 @@ The visitor of the demo will be able to observe the changes on an arbitrary comp
 The infrastructure that is used to deliver the encoded video via HTTP adaptive streaming is comprised of open-source software: Nginx\footnote{https://github.com/nginx/nginx}, Kaltura nginx-vod-module\footnote{https://github.com/kaltura/nginx-vod-module} and MediaElement.js\footnote{https://www.mediaelementjs.com}.
 
 The solution that we present in this demo using MediaElement.js relies on tile stitching before delivery of the video to an end-system.	
-This is not the only possible approach, DASH provides the extension DASH-SRD (spatial relationship description), which allows a client to access tile streams individually, synchronize them, and make independent quality choices for each \cite{niamut2016}.
+This is not the only possible approach, as DASH provides the extension DASH-SRD (spatial relationship description), which allows a client to individually access tile streams, synchronize them, and make independent quality choices for each of them~\cite{niamut2016}.
 However, existing DASH-SRD players make dynamic adaptation choices internally, whereas it is our goal to fully control tile configurations and demonstrate visual differences between them.
 
 
