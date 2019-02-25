@@ -1,0 +1,9 @@
+high,1x1,0.5
+high,1x2,0.75
+high,2x2,0.95
+mixed,1x1,0.66
+mixed,1x2,0.98
+mixed,2x2,0.90
+low,1x1,0.9
+low,1x2,0.8
+low,2x2,0.799
