@@ -1,0 +1,24 @@
+\section{RATS in an Infrastructure} \label{infra}
+
+The main contribution of RATS to the state-of-the-art is the efficient and accessible
+tiling of UHD videos on a single computer equipped with a consumer-grade GPU. We circumvent certain limitations of the GPU and are thereby able to generate videos compliant with the advanced tiling scheme of HEVC.
+
+In the demo, we present
+a variation of our solution that stitches tiles of various
+qualities together before delivery to an end-system.
+This is not the only possible approach, and is actually somewhat more complex
+than eliminating the stitching component and simply creating distinct video streams for each tile instead.
+DASH provides the extension DASH-SRD (spatial relationship description), which
+allows a client to access tile streams individually, synchronize them, and make
+independent quality choices for each \cite{niamut2016}. Providing the appropriate data and
+metadata for this approach is actually a simplification of the one we
+demonstrate in this paper.
+
+The remaining infrastructure used to deliver the encoded video via HTTP adaptive streaming is entirely comprised of open-source software, including Nginx\footnote{https://github.com/nginx/nginx}, Kaltura nginx-vod-module\footnote{https://github.com/kaltura/nginx-vod-module} and MediaElement.js\footnote{https://www.mediaelementjs.com}.
+
+%\begin{itemize}
+%\item NGinx: available from \url{https://github.com/nginx/nginx.git}
+%\item Kaltura nginx-vod-module: available from \url{https://github.com/kaltura/nginx-vod-module.git}
+%\item MediaElement.js: available from \url{https://www.mediaelementjs.com/}
+%\end{itemize}
+
