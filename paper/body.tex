@@ -109,13 +109,34 @@ The remaining infrastructure used to deliver the encoded video via HTTP adaptive
 
 \section{Evaluation} \label{eval}
 
-To evaluate RATS, we analyze its performance across multiple tile configurations. In particular, we examine the encoding speed, output file size, and the quality of the final image. The source video used was 30 seconds long with a resolution of $3940\times2048$ pixels.
+\begin{figure*}[t]
+	\centering
+	\subfigure[text]{
+		\includegraphics[width=.32\textwidth]{figures/times_v1.pdf}
+		\label{fig:time}
+	}
+	\subfigure[text]{
+		\includegraphics[width=.32\textwidth]{figures/sizes_v1.pdf}
+		\label{fig:size}
+	}
+	\subfigure[text]{
+		\includegraphics[width=.32\textwidth]{figures/ssim.pdf}
+		\label{fig:ssim}
+	}	
+	\caption{Evaluation results on a 30 second video with a resolution of $3840\times2048$ pixels. High and low bitrates are 1.6Mbps and 0.8Mbps, corresponding to 480p and 360p video, respectively.\protect\footnotemark}
+	\label{fig:eval}
+\end{figure*}
+To evaluate RATS, we analyze its performance across multiple tile configurations. In particular, we consider the encoding speed, output file size, and the quality of the final image.
 
 Examining Figs. \ref{fig:time} and \ref{fig:size}, we see that the number of tile columns is the primary factor affecting encoder performance. Intuitively, this makes sense; the number of columns dictates the number of sub-images necessary, each of which requires two more NVENC encodes per frame, multiple stitching operations, and column stacking of the source image. In contrast, tile rows are simply required to divide evenly along CTU borders, incurring minor computation costs only when they are misaligned and the source image must be cropped.
 
-Fig. \ref{fig:time} confirms that RATS easily satisfies our real-time requirement, finishing the encode and stitch process in one-third of the total video time in the worst case tested. There are several notable points in the figure. The first is the jump between 1 and 2 tile columns as the source image requires transformation and the stitcher begins to make more significant bitstream modifications. Another is the jump between 4 and 5 tile columns as sub-images are introduced. The gradual increase thenceforth occurs entirely within NVENC, unfortunately obfuscating its origin, but is likely a byproduct of the in-loop deblocking filter becoming less able to process tile boundaries in parallel as the image becomes taller and slimmer. The extra time at 7 columns similarly occurs within NVENC, and is likely due to the CTU width of the uncropped image not being divisible by 7, resulting in inferior alignment.
+Fig. \ref{fig:time} confirms that RATS easily satisfies our real-time requirement, finishing the encode and stitch process in one-third of the total video time in the worst case tested. The first notable point in the figure is the jump between 1 and 2 tile columns as the source image requires transformation and the stitcher begins to make more significant bitstream modifications. Another is the jump between 4 and 5 tile columns as sub-images are introduced. The gradual increase thenceforth occurs entirely within NVENC, unfortunately obfuscating its origin, but is likely a byproduct of the in-loop deblocking filter becoming less able to process tile boundaries in parallel as the image becomes taller and slimmer. The extra time at 7 columns similarly occurs within NVENC, and is likely due to the CTU width of the uncropped image not being divisible by 7, resulting in inferior alignment.
 
 In Fig. \ref{fig:size}, we see that the number of columns has a drastic effect on the output file size once sub-images are introduced. Decrease in coding efficiency is to be expected with smaller tiles due to intra-picture prediction and entropy encoding, but it is interesting that this only occurs with sub-images and is not affected by the number of tile rows. This may also result from the in-loop deblocking filter, or could simply be a byproduct of the encoding algorithms used by NVENC. As with Fig. \ref{fig:time}, the spike at 7 columns is likely caused by inferior alignment.
+
+In addition to having sufficient speed and coding efficiency, we must ensure that the video quality is good enough to achieve a high quality of experience for the end user. In a tile-based ABR streaming scenario, this is especially true in high-quality tiles since these will likely be at the current position of the viewport. Furthermore, NVENC is a new technology not yet capable of matching the output quality of software encoders, and we can expect quality to degrade with more tiles because intra-prediction and motion estimation cannot pass tile boundaries, so choosing an appropriate tile granularity is essential. As demonstrated in Fig. \ref{fig:ssim}, lorem ipsum dolom sit tet bla bla bla lorem ipsum.
+
+\footnotetext{https://support.google.com/youtube/answer/2853702}
 
 %\begin{figure}[t]
 %	% \includegraphics[width=\columnwidth]{figures/hevc_eval_qual.png}
@@ -123,18 +144,25 @@ In Fig. \ref{fig:size}, we see that the number of columns has a drastic effect o
 %\end{figure}
 
 
-\begin{figure}[t]
-	\includegraphics[width=\columnwidth]{figures/times_v1.pdf}
-	\caption{Encoding time for a 30s video across tile configurations. The tile qualities alternate between high and low in a checkerboard pattern. For each configuration that has an odd number of tiles, we set the extra tile to be low quality.}
-	\label{fig:time}
-\end{figure}
+
+%\begin{figure}[t]
+%	\includegraphics[width=\columnwidth]{figures/times_v1.pdf}
+	%\caption{Encoding time for a 30s video across tile configurations. The tile qualities alternate between high and low in a checkerboard pattern. For each configuration that has an odd number of tiles, we set the extra tile to be low quality.}
+	%\label{fig:time}
+%\end{figure}
 
 
-\begin{figure}[t]
-	\includegraphics[width=\columnwidth]{figures/sizes_v1.pdf}
-	\caption{Encoding output size in MB for a 30s video across tile configurations. The tile qualities alternate between high and low in a checkerboard pattern. }
-	\label{fig:size}
-\end{figure}
+%\begin{figure}[t]
+%	\includegraphics[width=\columnwidth]{figures/sizes_v1.pdf}
+%	\caption{Encoding output size in MB for a 30s video across tile configurations. The tile qualities alternate between high and low in a checkerboard pattern. }
+%	\label{fig:size}
+%\end{figure}
+
+%\begin{figure}[t]
+%	\includegraphics[width=\columnwidth]{figures/ssim.pdf}
+%	\caption{Encoding output size in MB for a 30s video across tile configurations. The tile qualities alternate between high and low in a checkerboard pattern. }
+%	\label{fig:ssim}
+%\end{figure}
 
 \section{Conclusion} \label{concl}
 
