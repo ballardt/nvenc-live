@@ -1,6 +1,6 @@
 # Introduction
 
-RATS was built using Ubuntu 17 and a GTX 1080 Ti. Any recent Ubuntu distro and a GPU with NVENCODE should work, but may require changes to the installation process. The goal of RATS is to encode a raw video file (YUV420p) into an HEVC bitstream in real-time in such a way that different parts of the video are encoded at different bitrates. This is accomplished by rearranging the pixels in the source then encoding each frame twice--once at a high bitrate, and once at a low one. Finally, the resulting bitstreams are stitched together into a single image containing some high-bitrate parts and some low-bitrate parts, and the pieces that aren’t used in the final image are simply discarded.
+RATS was built using Ubuntu 17 and a GTX 1080Ti. Any recent Ubuntu distro and a GPU with NVENCODE should work, but may require changes to the installation process. The goal of RATS is to encode a raw video file (YUV420p) into an HEVC bitstream in real-time in such a way that different parts of the video are encoded at different bitrates. This is accomplished by rearranging the pixels in the source then encoding each frame twice--once at a high bitrate, and once at a low one. Finally, the resulting bitstreams are stitched together into a single image containing some high-bitrate parts and some low-bitrate parts, and the pieces that aren’t used in the final image are simply discarded.
 
 
 This document will focus on the implementation of RATS and its usage. For a more thorough discussion on the idea behind RATS, see the demo paper. For any questions or comments, please contact trevorcoleballard@gmail.com.
@@ -149,23 +149,17 @@ You should now be ready to build RATS.
 
 ## RATS
 
-Move to the RATS source directory. Then:
+Move to the RATS source code directory (code/). Then:
 
-    g++ -static -c -o stitch.o stitch.cpp 
-    gcc -static -c -o encode.o nvenc_encode.c \ 
-        -I/home/<your username>/ffmpeg_build/include \ 
-        -L/home/<your username>/ffmpeg_build/lib \ 
-        -lswscale -lavdevice -lavformat \ 
-        -lavcodec -lavutil -lswresample \ 
-        -fvisibility=hidden 
-    g++ -o encode encode.o stitch.o \ 
-        -I/home/<your username>/ffmpeg_build/include \ 
-        -L/home/<your username>/ffmpeg_build/lib \ 
-        -lswscale -lavdevice -lavformat \ 
-        -lavcodec -lavutil -lswresample \ 
-        -fvisibility=hidden
+    mkdir build
+    cd build
+    cmake ..
+    make
+    make install
 
 # Usage
+
+TODO: update if necessary
 
 Execute the "encode" object from the last step of the build with the required parameters. The parameters are as follows:
 
@@ -190,7 +184,7 @@ For example, say you have a 3840x2048 video that you want to cut into 6 tiles: 2
 
 ## Videos
 
-I used the videos from the "360-Degree Videos Head Movements Dataset" at http://dash.ipv6.enstb.fr/headMovements/. I then used FFmpeg to trim the videos to a short length (e.g. 5s or 30s), then used FFmpeg to convert them to YUV420p files. Note that YUV420p is simply raw images one after another, so the file sizes can be extremely large. This is why one should first trim the video to a short length.
+A good collection of test videos are found in the "360-Degree Videos Head Movements Dataset" at http://dash.ipv6.enstb.fr/headMovements/. Use FFmpeg to trim the videos to a short length (e.g. 5s or 30s), then used FFmpeg to convert them to YUV420p files. Note that YUV420p is simply raw images one after another, so the file sizes can be extremely large. This is why one should first trim the video to a short length.
 
 To trim a video to a certain length, specify the start time with `-ss` and duration with `-t`. For example, to trim a video, starting 10s into the video, to a 30s video:
 
@@ -202,6 +196,8 @@ To convert to YUV, follow the below. Note that the `-r` option is the FPS, `-s:v
 
 
 # System Overview
+
+TODO update for new C++ code
 
 There are two primary source files, nvenc\_encode.c and stitch.cpp. Nvenc\_encode.c is the main file, with stitch.cpp being called only to do the stitching. The whole pipeline repeats for each frame in the source YUV420p video, and consists of the following steps:
 
