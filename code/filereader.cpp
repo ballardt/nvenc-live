@@ -2,25 +2,39 @@
 
 #include "filereader.h"
 
-FileReader::FileReader( size_t width, size_t height, size_t padded_height, int num_splits )
-    : _orig_width(width)
+FileReader::FileReader( char* filename, size_t width, size_t height, size_t padded_height, int num_splits )
+    : _filename( filename )
+    , _file(0)
+    , _orig_width(width)
     , _orig_height(height)
     , _padded_height( padded_height )
     , _num_splits( num_splits )
 {
-    _stacked_width  = _orig_width    / _num_splits;
-    _stacked_height = _padded_height * _num_splits;
-    _orig_cache.push_back( new Planeset( _orig_width, _orig_height ) );
-    _stacked_cache.push_back( new Planeset( _stacked_width, _stacked_height ) );
+    _file = fopen( _filename, "rb" );
+    if( _file )
+    {
+        _stacked_width  = _orig_width    / _num_splits;
+        _stacked_height = _padded_height * _num_splits;
+        _orig_cache = new Planeset( _orig_width, _orig_height );
+        _stacked_cache.push_back( new Planeset( _stacked_width, _stacked_height ) );
+    }
+    else
+    {
+        printf("Error: could not open input file\n");
+    }
 }
 
 FileReader::~FileReader( )
 {
-    for( auto ptr : _orig_cache )
-    {
-        delete ptr;
-    }
-    _orig_cache.clear();
+    delete _orig_cache;
+
+    for( auto ptr : _stacked_cache ) delete ptr;
+    _stacked_cache.clear();
+}
+
+bool FileReader::ok() const 
+{
+    return ( _file != 0 );
 }
 
 /**
@@ -28,16 +42,24 @@ FileReader::~FileReader( )
  * Returns a frame pointer if a frame was available, or 0 if there are no frames
  * left in the file
  */
-Planeset* FileReader::getNextFrame(FILE* file, int ySize)
+Planeset* FileReader::getNextFrame( int ySize )
 {
-	Planeset* ptr = _orig_cache[0];
+	Planeset* ptr = _orig_cache;
 
 	int uvSize = ySize / 4;
 	// int yRes, uRes, vRes;
-	if (fread(ptr->y, sizeof(unsigned char), ySize, file) != ySize ||
-		fread(ptr->u, sizeof(unsigned char), uvSize, file) != uvSize ||
-		fread(ptr->v, sizeof(unsigned char), uvSize, file) != uvSize) {
-		perror("Problem in getNextFrame");
+	if (fread(ptr->y, sizeof(unsigned char), ySize,  _file) != ySize ||
+		fread(ptr->u, sizeof(unsigned char), uvSize, _file) != uvSize ||
+		fread(ptr->v, sizeof(unsigned char), uvSize, _file) != uvSize)
+    {
+        if( feof(_file) )
+        {
+            fclose( _file );
+        }
+        else
+        {
+		    perror("Problem in getNextFrame");
+        }
 		return 0;
 	}
 

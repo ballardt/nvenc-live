@@ -8,10 +8,12 @@
 class FileReader
 {
 public:
-    FileReader( size_t width, size_t height, size_t padded_height, int num_splits );
+    FileReader( char* filename, size_t width, size_t height, size_t padded_height, int num_splits );
     ~FileReader( );
 
-    Planeset* getNextFrame(FILE* file, int ySize);
+    bool ok() const;
+
+    Planeset* getNextFrame( int ySize );
 
 private:
     /**
@@ -28,13 +30,15 @@ private:
                                   int numSplits );
 
 private:
+    char*                  _filename;
+    FILE*                  _file;
     size_t                 _orig_width;
     size_t                 _orig_height;
     size_t                 _padded_height;
     int                    _num_splits;
     size_t                 _stacked_width;
     size_t                 _stacked_height;
-    std::vector<Planeset*> _orig_cache;
+    Planeset*              _orig_cache;
     std::vector<Planeset*> _stacked_cache;
 };
 

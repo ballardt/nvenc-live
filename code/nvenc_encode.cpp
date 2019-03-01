@@ -245,23 +245,22 @@ int main(int argc, char* argv[])
 		//}
 	}
 
-	FILE* inFile = fopen(config.inputFilename, "rb");
-	if (inFile == NULL) {
-		printf("Error: could not open input file\n");
-		return 1;
-	}
-	FILE* outFile = fopen(config.outputFilename, "wb");
-	if (outFile == NULL) {
-		printf("Error: could not open output file\n");
-		return 1;
-	}
 	bitrateValues[HIGH_BITRATE]        = config.highBitrate;
 	bitrateValues[LOW_BITRATE]         = config.lowBitrate;
 	int ySize = config.width * config.height;
 	int uvSize = ySize / 4;
 	int tiledBitstreamSize;
 
-    FileReader* fr = new FileReader( config.width, config.height, paddedHeight, NUM_SPLITS );
+    FileReader* fr = new FileReader( config.inputFilename, config.width, config.height, paddedHeight, NUM_SPLITS );
+    if( !fr->ok() ) {
+        return 1;
+    }
+
+	FILE* outFile = fopen(config.outputFilename, "wb");
+	if (outFile == NULL) {
+		printf("Error: could not open output file\n");
+		return 1;
+	}
 
     // Planeset* inputFrame = 0;
 	// Planeset outputFrame( config.width/NUM_SPLITS, paddedHeight*NUM_SPLITS );
@@ -273,7 +272,7 @@ int main(int argc, char* argv[])
 	tiledBitstream = (unsigned char*)malloc(sizeof(unsigned char) * BITSTREAM_SIZE);
 
 	// The main loop. Get a frame, rearrange it, send it to NVENC, stitch it, then write it out.
-	while( outputFrame = fr->getNextFrame(inFile, ySize) )
+	while( outputFrame = fr->getNextFrame(ySize) )
     {
 		// config.height = paddedHeight;
         for( auto group : config.contextGroups )
@@ -307,7 +306,6 @@ int main(int argc, char* argv[])
         group->release();
 
 	free(tiledBitstream);
-	fclose(inFile);
 	fclose(outFile);
 }
 
