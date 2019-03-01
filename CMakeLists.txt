@@ -17,7 +17,8 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations")
 # ==============================================================================
 # Boost
 # ==============================================================================
-# find_package(Boost 1.60.0 QUIET COMPONENTS atomic container date_time filesystem graph log log_setup program_options regex serialization system thread)
+# some possible boost components:
+# atomic date_time filesystem log regex serialization
 find_package(Boost 1.60.0 QUIET COMPONENTS container program_options system thread)
 
 if(Boost_FOUND)
@@ -34,7 +35,6 @@ add_definitions(-DBOOST_ALL_NO_LIB)
 # https://lists.boost.org/boost-users/2009/11/54015.php
 add_definitions(-DBOOST_ALL_DYN_LINK)
 
-include_directories(${Boost_INCLUDE_DIRS})
 link_directories(${Boost_LIBRARY_DIRS})
 add_definitions(${Boost_DEFINITIONS})
 # ==============================================================================

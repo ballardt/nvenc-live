@@ -25,6 +25,7 @@ extern "C"
 #include "nvenc_planeset.h"
 #include "nvenc_hw.h"
 #include "nvenc_bitrates.h"
+#include "filereader.h"
 
 #define NUM_SPLITS (config.numTileCols)
 #define BITSTREAM_SIZE 200000 // Increase if necessary; the program will let you know
@@ -41,53 +42,6 @@ int bitrateValues[4];
 Config config;
 
 Hardware hw;
-
-/**
- * Get the next frame, consisting of a Y, U, and V component.
- * Returns 1 if a frame was available, or 0 if there are no frames left in the file
- */
-int getNextFrame(FILE* file, Planeset* ptr, int ySize)
-{
-	int uvSize = ySize / 4;
-	int yRes, uRes, vRes;
-	if (fread(ptr->y, sizeof(unsigned char), ySize, file) != ySize ||
-		fread(ptr->u, sizeof(unsigned char), uvSize, file) != uvSize ||
-		fread(ptr->v, sizeof(unsigned char), uvSize, file) != uvSize) {
-		perror("Problem in getNextFrame");
-		return 0;
-	}
-	return 1;
-}
-
-/**
- * Cut a frame component (Y, U, or V) into columns and stack them on top of each other.
- */
-void rearrangeFrameComponent(unsigned char* inComponent, unsigned char* outComponent,
-                             int origWidth, int origHeight,
-							 int numSplits)
-{
-	int newWidth = origWidth / numSplits;
-	for (int i=0; i<numSplits; i++) {
-		for (int j=0; j<origHeight; j++) {
-			int oldIdx = (i*newWidth) + (j*origWidth);
-			int newIdx = (j*newWidth) + (i*origHeight*newWidth);
-			memcpy( outComponent+newIdx, inComponent+oldIdx, newWidth ); 
-		}
-	}
-}
-
-/**
- * Cut a frame into columns and stack them on top of each other.
- */
-void rearrangeFrame( Planeset* input, Planeset* output, int yWidth,
-					int yHeight)
-{
-	int uvWidth = yWidth / 2;
-	int uvHeight = yHeight / 2;
-	rearrangeFrameComponent( input->y, output->y, yWidth, yHeight, NUM_SPLITS);
-	rearrangeFrameComponent( input->u, output->u, uvWidth, uvHeight, NUM_SPLITS);
-	rearrangeFrameComponent( input->v, output->v, uvWidth, uvHeight, NUM_SPLITS);
-}
 
 FILE* dbg_file = 0;
 
@@ -307,8 +261,11 @@ int main(int argc, char* argv[])
 	int uvSize = ySize / 4;
 	int tiledBitstreamSize;
 
-	Planeset inputFrame( config.width, config.height );
-	Planeset outputFrame( config.width/NUM_SPLITS, paddedHeight*NUM_SPLITS );
+    FileReader* fr = new FileReader( config.width, config.height, paddedHeight, NUM_SPLITS );
+
+    // Planeset* inputFrame = 0;
+	// Planeset outputFrame( config.width/NUM_SPLITS, paddedHeight*NUM_SPLITS );
+	Planeset* outputFrame = 0;
 
 	for (int i=0; i<numContextGroups; i++) {
         config.contextGroups[i]->setBufferSize( BITSTREAM_SIZE );
@@ -316,16 +273,15 @@ int main(int argc, char* argv[])
 	tiledBitstream = (unsigned char*)malloc(sizeof(unsigned char) * BITSTREAM_SIZE);
 
 	// The main loop. Get a frame, rearrange it, send it to NVENC, stitch it, then write it out.
-	while (getNextFrame(inFile, &inputFrame, ySize))
+	while( outputFrame = fr->getNextFrame(inFile, ySize) )
     {
 		// config.height = paddedHeight;
         for( auto group : config.contextGroups )
             group->clearBitstreamSizes();
 
-		rearrangeFrame( &inputFrame, &outputFrame, config.width, paddedHeight );
-		encodeFrame( outputFrame.y,
-                     outputFrame.u,
-                     outputFrame.v,
+		encodeFrame( outputFrame->y,
+                     outputFrame->u,
+                     outputFrame->v,
                      config.width/NUM_SPLITS,
                      paddedHeight*NUM_SPLITS );
 		tiledBitstreamSize = doStitching(tiledBitstream,

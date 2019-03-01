@@ -5,10 +5,12 @@ add_executable(encode
     	stitch.cpp
 	context_group.cpp
 	nvenc_config.cpp
-	nvenc_hw.cpp)
+	nvenc_hw.cpp
+	filereader.cpp)
 
 target_include_directories(encode
     PRIVATE
+    ${Boost_INCLUDE_DIRS}
     ${LIBAV_INCLUDE_DIRS})
 
 target_link_libraries(encode
