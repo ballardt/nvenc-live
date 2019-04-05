@@ -1,0 +1,30 @@
+A1: ... motion vectors that can cross the tiles border ...
+    - clarified in section 2 §2
+    - may be better to clarify that NVENC obeys slice boundaries, we exploit that for making tiles
+
+A2: ... stitching is performed at the server side or at the client side ...
+    - must be added to the text: DASH SRD fixes the problem on the client side, but we'd like to have proxy-side sitching for 5G edge computing demonstrations
+    - our general approach can work with an arbitrary GoP frequency, so a client with minimal buffer can switch tile quality quickly. We have chosen an N-second GoP length for the demo, but alternative patterns are conceivable.
+    - with NVENC, we cannot generate SI- og SP-frames, which would allow quick switching between qualities
+    - we could combine it with the (closed-source) server/client-combi solution that we built for DOI 10.1109/ISM.2018.00022
+
+
+B1: In the introduction you state that traditional methods for adaptive streaming do not work on ultra-high res videos. Please add a reference to that statement.
+    - Good criticism. Our words were to strong.
+
+B2: In Fig 1 you visualise what the method does for k=1. In addition it would help the reader if you also show what it does for k=2.
+    - Excellent idea. We could use without making Fig 1 bigger.
+
+B3: In 3.2 you mention byte aligned sequences and use 0x notations of different sizes (0x00001, 0x03, 0x0000). That is confusing me, and probably other readers as well. Can’t you present a visual representation of these byte aligned sequences? Also the way you bypass the limited image hight by dividing the image in sub-images needs a visual clarification. In the last paragraph of that section you have the typo “dirver” iso “driver”.
+    - No sure - we should discuss
+
+B4: In Fig 2 you present the results. The SSIM scores on “Middle” quality are based on a checkerboard pattern. This comes out of the blue. Add an introduction in the text and at least an image. Some images of typical video frames used could be helpful as well.
+    - Good point, not sure how to do that.
+
+
+C1: .. tiling is not supported by existing hardware encoders ...
+    - reformulated and fixed
+
+C2: Fig 2c is very hard to understand
+    - not sure what that means
+
