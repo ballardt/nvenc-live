@@ -10,7 +10,7 @@ The rest of this paper is organized as follows. In Section \ref{hevc}, we provid
 \renewcommand{\figurename}{Fig.}
 \begin{figure*}[t]
 	\centering
-	\includegraphics[width=0.8\textwidth]{figures/Streaming_scenario_v3.pdf}
+	\includegraphics[width=0.8\textwidth]{../figures/Streaming_scenario_v3.pdf}
 	\caption{Adaptive $360\,^{\circ}$ Live Streaming. In this demo we show hardware encoding that allows us to stitch single tiles of the $360\,^{\circ}$ video in different quality levels (see expanded pipeline). The lower part of the figure shows the demo setup in a streaming infrastructure that makes use of HTTP adaptive streaming.}
 	\label{fig:pipeline}
 \end{figure*}
@@ -89,27 +89,27 @@ A second limitation is that the GPU driver does not allow more than 2 simultaneo
 \input{eval}
 
 %\begin{figure}[t]
-%	% \includegraphics[width=\columnwidth]{figures/hevc_eval_qual.png}
+%	% \includegraphics[width=\columnwidth]{../figures/hevc_eval_qual.png}
 %	\caption{Encoding speed vs. tile quality for $4\times4$ tiles. All tiles on the left are of the high bitrate, while those on the right are of the low bitrate.}
 %\end{figure}
 
 
 
 %\begin{figure}[t]
-%	\includegraphics[width=\columnwidth]{figures/times_v1.pdf}
+%	\includegraphics[width=\columnwidth]{../figures/times_v1.pdf}
 	%\caption{Encoding time for a 30s video across tile configurations. The tile qualities alternate between high and low in a checkerboard pattern. For each configuration that has an odd number of tiles, we set the extra tile to be low quality.}
 	%\label{fig:time}
 %\end{figure}
 
 
 %\begin{figure}[t]
-%	\includegraphics[width=\columnwidth]{figures/sizes_v1.pdf}
+%	\includegraphics[width=\columnwidth]{../figures/sizes_v1.pdf}
 %	\caption{Encoding output size in MB for a 30s video across tile configurations. The tile qualities alternate between high and low in a checkerboard pattern. }
 %	\label{fig:size}
 %\end{figure}
 
 %\begin{figure}[t]
-%	\includegraphics[width=\columnwidth]{figures/ssim.pdf}
+%	\includegraphics[width=\columnwidth]{../figures/ssim.pdf}
 %	\caption{Encoding output size in MB for a 30s video across tile configurations. The tile qualities alternate between high and low in a checkerboard pattern. }
 %	\label{fig:ssim}
 %\end{figure}
@@ -119,6 +119,6 @@ A second limitation is that the GPU driver does not allow more than 2 simultaneo
 In this work, we demonstrated an adaptive live video platform capable of encoding tiled $360\,^{\circ}$ videos at multiple bitrates using an accessible consumer-grade GPU. By working closely with NVENCODE and the HEVC standard, we overcame limitations that had previously rendered hardware encoders useless in generating adaptive tile-based live video streaming. Furthermore, we have made our code open source and provided a demonstration of an HTTP video streaming service based on RATS.
 
 %\begin{figure}[t]
-%	\includegraphics[width=\columnwidth]{figures/times_size_combined_v1.pdf}
+%	\includegraphics[width=\columnwidth]{../figures/times_size_combined_v1.pdf}
 %	\caption{JUST FOR US. A combined view of the encoding time and the resulting output size.}
 %\end{figure}

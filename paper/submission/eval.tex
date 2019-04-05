@@ -3,17 +3,17 @@
 \begin{figure*}[t]
 	\centering
 	\subfigure[Real time required to encode a tiled configuration for 30~seconds of 3840x2048 video. The encoding process is CPU-bound because tiles a rearranged by the CPU.]{
-		\includegraphics[width=.31\textwidth]{figures/times_v1.pdf}
+		\includegraphics[width=.31\textwidth]{../figures/times_v1.pdf}
 		\label{fig:time}
 	}
     \hfill
 	\subfigure[Sizes of the encoded tiled videos. The video size grows rapidly when additional encoding contexts are required.]{
-		\includegraphics[width=.31\textwidth]{figures/sizes_v1.pdf}
+		\includegraphics[width=.31\textwidth]{../figures/sizes_v1.pdf}
 		\label{fig:size}
 	}
     \hfill
 	\subfigure[SSIM scores between input and tiles video. "Middle" quality uses a checkerboard pattern. Hardware alignment rules require padding for 3xN, 5xN, 6xN and 7xN.]{
-		\includegraphics[width=.31\textwidth]{figures/ssim.pdf}
+		\includegraphics[width=.31\textwidth]{../figures/ssim.pdf}
 		\label{fig:ssim}
 	}	
 	\caption{Evaluation results on a 30 second video with a resolution of $3840\times2048$ pixels. High and low bitrates are 1.6Mbps and 0.8Mbps, corresponding to 480p and 360p video, respectively.\protect\footnotemark}
