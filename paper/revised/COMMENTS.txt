@@ -11,6 +11,7 @@ A2: ... stitching is performed at the server side or at the client side ...
 
 B1: In the introduction you state that traditional methods for adaptive streaming do not work on ultra-high res videos. Please add a reference to that statement.
     - Good criticism. Our words were to strong.
+    - It may not be impossible, but because we talk about 360 videos, it's a horrible waste of BW.
 
 B2: In Fig 1 you visualise what the method does for k=1. In addition it would help the reader if you also show what it does for k=2.
     - Excellent idea. We could use without making Fig 1 bigger.
@@ -19,7 +20,7 @@ B3: In 3.2 you mention byte aligned sequences and use 0x notations of different 
     - No sure - we should discuss
 
 B4: In Fig 2 you present the results. The SSIM scores on “Middle” quality are based on a checkerboard pattern. This comes out of the blue. Add an introduction in the text and at least an image. Some images of typical video frames used could be helpful as well.
-    - Good point, not sure how to do that.
+    - actually, checkerboard is the worst case, having the maximum quality transitions possible
 
 
 C1: .. tiling is not supported by existing hardware encoders ...
@@ -27,4 +28,3 @@ C1: .. tiling is not supported by existing hardware encoders ...
 
 C2: Fig 2c is very hard to understand
     - not sure what that means
-
