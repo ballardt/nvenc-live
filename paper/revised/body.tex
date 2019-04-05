@@ -19,16 +19,19 @@ The rest of this paper is organized as follows. In Section \ref{hevc}, we provid
 
 \section{HEVC and NVENC} \label{hevc}
 
-HEVC, also known as H.265, is a modern video compression standard capable of dramatically shrinking video file size without sacrificing quality. Encoding an HEVC video is a computationally expensive process which is not easily parallelized. Instead, encoders divide each frame of the video into independent regions and encode them separately, joining their edges to form the full image during playback. Two functionally identical versions of this concept, slices and tiles, exist within the HEVC standard, but slices are limited to chunking the video into wide strips while tiles can divide a video into rectangular CTU-based (Coding Tree Unit) areas of any size. Tiles are supported by most decoders, but it is only present in a few software encoders far too slow for live streaming.
+HEVC, also known as H.265, is a modern video compression standard capable of dramatically shrinking video file size without sacrificing quality. Encoding an HEVC video is a computationally expensive process which is not easily parallelized. Instead, encoders divide each frame of the video into independent regions and encode them separately, joining their edges to form the full image during playback. Two functionally identical versions of this concept, slices and tiles, exist within the HEVC standard, but slices are limited to chunking the video into wide strips while tiles can divide a video into rectangular CTU-based (Coding Tree Unit) areas of any size.
+Tiles are supported by most decoders, but among publicly available encoders only a few software encoders support tile-based encoding with user-defined tile sizes. These software encoders are far too slow for live streaming.
 
-HEVC bitstreams consist of sequential NAL (Network Abstraction Layer) units with header and data components. Each slice or tile in the frame is encoded as a single NAL unit. Because tiles are independently-decodable, we can rearrange a set of given tiles by making few NAL header modifications. This process that is known as stitching, is widely used in video conferencing~\cite{amon2012,feldmann2013,delafuente2017}.
+HEVC bitstreams consist of sequential NAL (Network Abstraction Layer) units with header and data components.
+Each slice or tile in the frame is encoded as a single NAL unit, where the encoder does never create motion vectors that cross slice or tile boundaries. Visible boundaries are prevented by a de-blocking filter.
+Because tiles are independently-decodable, we can rearrange a set of given tiles by making few NAL header modifications. This process that is known as stitching, is widely used in video conferencing~\cite{amon2012,feldmann2013,delafuente2017}.
 
-NVENC is a state-of-the-art hardware HEVC encoder present on newer Nvidia GPUs. Interactions with NVENC occur through the NVENCODE API \footnote{https://developer.nvidia.com/nvenc-programming-guide}. It is possible to swap out encoder configurations, which contain parameters and previous image data, between frames, allowing one to encode multiple videos simultaneously.
+NVENC is a state-of-the-art hardware HEVC encoder present on newer Nvidia GPUs. Interactions with NVENC occur through the NVENCODE API\footnote{https://developer.nvidia.com/nvenc-programming-guide}. It is possible to swap out encoder configurations, which contain parameters and previous image data, between frames, allowing one to encode multiple videos simultaneously.
 
 \section{RATS Implementation} \label{rats}
 To get around the lack of tiling in NVENC, we divide the RATS pipeline into an encoding component, in which a raw video frame is manipulated and converted into low- and high-quality bitstreams; and a stitching component, in which slices from these bitstreams are converted to tiles and arranged in the desired manner.
 
-Details on the installation and usage of RATS, as well as an overview of the source code, can be found in the git repository \footnote{https://github.com/ballardt/nvenc-live}.
+Details on the installation and usage of RATS, as well as an overview of the source code, can be found in the git repository\footnote{https://github.com/ballardt/nvenc-live}.
 
 \subsection{Encoding}
 
