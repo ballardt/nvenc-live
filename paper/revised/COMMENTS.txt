@@ -12,12 +12,15 @@ A2: ... stitching is performed at the server side or at the client side ...
 B1: In the introduction you state that traditional methods for adaptive streaming do not work on ultra-high res videos. Please add a reference to that statement.
     - Good criticism. Our words were to strong.
     - It may not be impossible, but because we talk about 360 videos, it's a horrible waste of BW.
+	- Trevor: Changed wording in text.
 
 B2: In Fig 1 you visualise what the method does for k=1. In addition it would help the reader if you also show what it does for k=2.
     - Excellent idea. We could use without making Fig 1 bigger.
+	- Trevor: Added into Fig. 1
 
 B3: In 3.2 you mention byte aligned sequences and use 0x notations of different sizes (0x00001, 0x03, 0x0000). That is confusing me, and probably other readers as well. Can’t you present a visual representation of these byte aligned sequences? Also the way you bypass the limited image hight by dividing the image in sub-images needs a visual clarification. In the last paragraph of that section you have the typo “dirver” iso “driver”.
     - No sure - we should discuss
+	- Trevor: Defined "byte-aligned sequence" in the text and added sub-images to Fig. 1
 
 B4: In Fig 2 you present the results. The SSIM scores on “Middle” quality are based on a checkerboard pattern. This comes out of the blue. Add an introduction in the text and at least an image. Some images of typical video frames used could be helpful as well.
     - actually, checkerboard is the worst case, having the maximum quality transitions possible
