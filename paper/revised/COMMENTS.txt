@@ -7,6 +7,7 @@ A2: ... stitching is performed at the server side or at the client side ...
     - our general approach can work with an arbitrary GoP frequency, so a client with minimal buffer can switch tile quality quickly. We have chosen an N-second GoP length for the demo, but alternative patterns are conceivable.
     - with NVENC, we cannot generate SI- og SP-frames, which would allow quick switching between qualities
     - we could combine it with the (closed-source) server/client-combi solution that we built for DOI 10.1109/ISM.2018.00022
+    - Carsten
 
 
 B1: In the introduction you state that traditional methods for adaptive streaming do not work on ultra-high res videos. Please add a reference to that statement.
@@ -24,7 +25,7 @@ B3: In 3.2 you mention byte aligned sequences and use 0x notations of different 
 
 B4: In Fig 2 you present the results. The SSIM scores on “Middle” quality are based on a checkerboard pattern. This comes out of the blue. Add an introduction in the text and at least an image. Some images of typical video frames used could be helpful as well.
     - actually, checkerboard is the worst case, having the maximum quality transitions possible
-
+    - Amr
 
 C1: .. tiling is not supported by existing hardware encoders ...
     - reformulated and fixed
