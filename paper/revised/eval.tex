@@ -1,6 +1,6 @@
 \section{Evaluation} \label{eval}
 
-\begin{figure*}[t]
+\begin{figure*}[h!]
 	\centering
 	\subfigure[Real time required to encode a tiled configuration for 30~seconds of 3840x2048 video. The encoding process is CPU-bound because tiles a rearranged by the CPU.]{
 		\includegraphics[width=.31\textwidth]{../figures/times_v1.pdf}
@@ -12,7 +12,7 @@
 		\label{fig:size}
 	}
     \hfill
-	\subfigure[SSIM scores between input and tiles video. "Middle" quality uses a checkerboard pattern. Hardware alignment rules require padding for 3xN, 5xN, 6xN and 7xN.]{
+	\subfigure[SSIM scores between input and tiles video. "Middle" quality uses a checkerboard pattern. Hardware alignment rules require padding for 3, 5, 6 and 7 rows; 5 rows is given as example. Other rows are well-aligned; 8 rows are given as example]{
 		\includegraphics[width=.31\textwidth]{../figures/ssim.pdf}
 		\label{fig:ssim}
 	}	

@@ -4,9 +4,13 @@ A1: ... motion vectors that can cross the tiles border ...
 
 A2: ... stitching is performed at the server side or at the client side ...
     - must be added to the text: DASH SRD fixes the problem on the client side, but we'd like to have proxy-side sitching for 5G edge computing demonstrations
+    - fixed in section 1 without mentioning SRD
     - our general approach can work with an arbitrary GoP frequency, so a client with minimal buffer can switch tile quality quickly. We have chosen an N-second GoP length for the demo, but alternative patterns are conceivable.
+    - added sentence at the end of section  3.2
     - with NVENC, we cannot generate SI- og SP-frames, which would allow quick switching between qualities
+    - also in section 3.2
     - we could combine it with the (closed-source) server/client-combi solution that we built for DOI 10.1109/ISM.2018.00022
+    - mentioned in 2 places
     - Carsten
 
 
