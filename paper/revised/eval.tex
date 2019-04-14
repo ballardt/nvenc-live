@@ -12,7 +12,9 @@
 		\label{fig:size}
 	}
     \hfill
-	\subfigure[SSIM scores between input and tiles video. "Middle" quality uses a checkerboard pattern. Hardware alignment rules require padding for 3, 5, 6 and 7 rows; 5 rows is given as example. Other rows are well-aligned; 8 rows are given as example]{
+	\subfigure[SSIM scores between input and tiles video. "Middle" quality uses a checkerboard pattern. Hardware alignment rules require padding for 3, 5, 6 and 7 rows; 5 and 8 rows are given as representative examples.
+ %Other rows are well-aligned; 8 rows are given as example
+ ]{
 		\includegraphics[width=.31\textwidth]{../figures/ssim.pdf}
 		\label{fig:ssim}
 	}	
@@ -21,7 +23,7 @@
 \end{figure*}
 To evaluate RATS, we analyze its performance across multiple tile configurations. In particular, we consider the encoding speed, output file size, and the quality of the final image.
 %
-Examining Figs.~\ref{fig:time} and \ref{fig:size}, we see that the number of tile columns is the primary factor affecting encoder performance. Intuitively, this makes sense; the number of columns dictates the number of sub-images necessary, each of which requires two more NVENC encodes per frame, multiple stitching operations, and column stacking of the source image. In contrast, the hardware encoder supports tile rows using Slice mode. Slice mode incurs additional computation costs only when alignment rules force us to crop the source image.
+Examining Figs.~\ref{fig:time} and \ref{fig:size}, we see that the number of tile columns is the primary factor affecting encoder performance. Note that the number of columns dictates the number of sub-images necessary, each of which requires two more NVENC encodes per frame, multiple stitching operations, and column stacking of the source image. In contrast, the hardware encoder supports tile rows using Slice mode. Slice mode incurs additional computation costs only when alignment rules force us to crop the source image.
 
 Fig.~\ref{fig:time} confirms that RATS easily satisfies our real-time requirement, finishing the encode and stitch process in one-third of the total video time in the worst case tested.
 The small jump from 1 to 2 columns is due to a required source image transformation, both before encoding and afterwards in stitching.
@@ -34,13 +36,13 @@ It is likely a byproduct of the in-loop deblocking filter, which crosses tile bo
 
 In Fig.~\ref{fig:size}, we see that the number of columns has a drastic effect on the output file size once sub-images are introduced. Decrease in coding efficiency is to be expected with smaller tiles due to intra-picture prediction and entropy encoding, but it is interesting that this only occurs with sub-images and is not affected by the number of tile rows.
 This may also result from the in-loop deblocking filter.
-As with Fig.~\ref{fig:time}, the spike at 7 columns is likely caused by inferior alignment.
+Here too, the spike at 7 columns is likely due to inferior alignment.
 
 In addition to having sufficient speed and coding efficiency, we must ensure that the video quality is good enough to achieve a high quality of experience for the end user.
 In a tile-based ABR streaming scenario, this is especially true in high-quality tiles since these will likely be at the current position of the viewport.
 Furthermore, NVENC is a new technology not yet capable of matching the output quality of software encoders, and we can expect quality to degrade with more tiles because intra-prediction and motion estimation cannot pass tile boundaries, so choosing an appropriate tile granularity is essential.
 We use SSIM to express the deviation between the original and the tiled encoded frames, showing the results in Fig.~\ref{fig:ssim}.
-Well-aligned tile configurations (1, 2, 4 and 8 rows, 1 through 6 colums) provide an intuitive quality degradation from high to low quality. Forced alignment of the tile height by cropping requires interpolation before SSIM, with the result that lower quality images with higher blur scores better in SSIM. Configurations with 7 and 8 columns require horizontal padding, resulting in very low SSIM scores.
+Well-aligned tile configurations (1, 2, 4 and 8 rows, 1 through 6 colums) provide an intuitive quality degradation from high to low quality. In Fig.~\ref{fig:ssim} we only show the representative cases of 5 and 8 rows. For the middle quality we use a checkerboard pattern of alternating low and high qualities per tile showing the maximum number of quality transitions possible. Note that forced alignment of the tile height by cropping requires interpolation before SSIM, with the result that lower quality images with higher blur scores better in SSIM. Configurations with 7 and 8 columns require horizontal padding, resulting in very low SSIM scores.
 
 \footnotetext{https://support.google.com/youtube/answer/2853702}
 

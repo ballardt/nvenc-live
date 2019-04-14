@@ -3,7 +3,7 @@
 
 Hardware HEVC encoders have recently appeared on consumer-grade GPUs, opening the door to mass live $360\,^{\circ}$ video streaming.
 Traditional methods of adaptive bitrate (ABR) streaming, however, are ill-suited to these ultra-high resolution videos, wasting enormous amounts of bandwidth on portions of the video outside the viewport.
-A body of work on tile-based ABR streaming for UHD video has recently appeared in which the quality requested for each section of a video corresponds to the current or predicted viewport, allowing end-users to view the most important parts of a video in high-quality without stalling \cite{lefeuvre2016,corbillon2016,PetrangeliSHT17}. This is straightforward for pre-rendered videos, but is more complicated in live streaming because each quality requires a different encode, introducing some delay in the availability of each new segment. Furthermore, we are not aware of any commercially available hardware encoder that supports user-configurable tile sizes. One may feed each tile to the encoder as a separate video and stitch them together afterwards, but the cropping required on each frame introduces considerable overhead.
+A body of work on tile-based ABR streaming for UHD video has recently appeared in which the quality requested for each section of a video corresponds to the current or predicted viewport, allowing end-users to view the most important parts of a video in high-quality without stalling \cite{lefeuvre2016,corbillon2016,PetrangeliSHT17}. This is straightforward for pre-rendered videos, but is more complicated in live streaming because each quality requires a different encode, introducing some delay in the availability of each new segment. We are not aware of any commercially available hardware encoder that supports user-configurable tile sizes. One may feed each tile to the encoder as a separate video and stitch them afterwards, but the cropping required on each frame introduces considerable overhead.
 
 To combat these challenges, we introduce RATS, a GPU-based HEVC encoding platform to tile, encode, and stitch 360 video at multiple qualities in real-time. The source video stream is divided into columns which are stacked on top of one another. The rearranged video image is then fed to the hardware encoder with slice boundaries set at the edges of the source video. This process occurs twice for each frame, once with a low average bitrate and once with a high one. When the video is reconstructed during playback, each tile is an independent region, allowing us to pick where every tile (belonging to either bitstream) should appear in the final video. For this demo, we implement stitching on the server side, with the expectation of deploying the code in 5G Edge Computing.
 We showed our work on client-side stitching earlier~\cite{ism-2018}.
@@ -18,6 +18,7 @@ The rest of this paper is organized as follows. In Section \ref{hevc}, we provid
 	\label{fig:pipeline}
 \end{figure*}
 
+\vspace{-10pt}
 \section{HEVC and NVENC} \label{hevc}
 
 HEVC, also known as H.265, is a modern video compression standard capable of dramatically shrinking video file size without sacrificing quality. Encoding an HEVC video is a computationally expensive process which is not easily parallelized. Instead, encoders divide each frame of the video into independent regions and encode them separately, joining their edges to form the full image during playback. Two functionally identical versions of this concept, slices and tiles, exist within the HEVC standard, but slices are limited to chunking the video into wide strips while tiles can divide a video into rectangular CTU-based (Coding Tree Unit) areas of any size.
@@ -74,9 +75,10 @@ The stitching process uses the Boost C++ dynamic\_bitstream API~\footnote{https:
 		& \texttt{num\_entry\_point\_offsets}  \\
 		\bottomrule
 	\end{tabularx}
-	\caption{Table containing all NAL header fields requiring modification.}
+	\caption{All NAL header fields requiring modification.}
 \label{tab:stitch}
 \end{table}
+%\vspace{-10pt}
 \renewcommand{\figurename}{Fig.}
 \setcounter{figure}{1}
 
@@ -88,9 +90,9 @@ In this work, we use the Nvidia GTX 1080Ti, a powerful consumer-grade GPU. As de
 %
 First, the maximum input image size is $8192\times8192$ pixels. Because we stack tile columns before encoding, the height limit is quickly reached. To get around this, we divide the image into sub-images whose stacked columns do not exceed $8192$ pixels, and encode each of these sub-images independently at either quality (see Fig.~\ref{fig:pipeline}). More tile columns thus require additional encodes, but NVENC is fast enough to keep the total encoding time well below our target.
 
-Additionally, we must make some changes to the stitching process to handle sub-images. Note that the position of each tile within a sub-image may change in the final image. For example, consider a video with 6 tile columns. From left to right, if the first 4 columns constitute one sub-image and the final 2 columns constitute another, the CTU offsets of all tiles except those in the first row of the first sub-image will change, and the number of required bits to record the offset will change as well. Furthermore, the first tile in the second sub-image will not contain a CTU offset, so this value must be inserted.
+Additionally, we must change the stitching process to handle sub-images. Note that the position of each tile within a sub-image may change in the final image. For example, consider a video with 6 tile columns. From left to right, if the first 4 columns constitute one sub-image and the final 2 columns constitute another, the CTU offsets of all tiles except those in the first row of the first sub-image will change, and the number of required bits to record the offset will change as well. Furthermore, the first tile in the second sub-image will not contain a CTU offset, so this value must be inserted.
 
-A second limitation is that the GPU driver does not allow more than 2 simultaneous context configurations during the encoding process, which would normally prevent the use of sub-images. Fortunately, this is a limitation imposed by the driver, and it is possible to remove the 2 context limit by sending a particular bytestream to the GPU. A script to do so is provided in nvidia-patch~\footnote{https://github.com/keylase/nvidia-patch}, which we used for this demo.
+A second limitation is that the GPU driver does not allow more than 2 simultaneous context configurations during the encoding process, which would normally prevent the use of sub-images. Fortunately, this is a limitation imposed by the driver, and it is possible to remove this limit by sending a particular bytestream to the GPU. A script to do so is provided in nvidia-patch~\footnote{https://github.com/keylase/nvidia-patch}, which we used here.
 
 \input{demo}
 
