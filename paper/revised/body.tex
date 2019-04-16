@@ -21,8 +21,8 @@ The rest of this paper is organized as follows. In Section \ref{hevc}, we provid
 \vspace{-10pt}
 \section{HEVC and NVENC} \label{hevc}
 
-HEVC, also known as H.265, is a modern video compression standard capable of dramatically shrinking video file size without sacrificing quality. Encoding an HEVC video is a computationally expensive process which is not easily parallelized. Instead, encoders divide each frame of the video into independent regions and encode them separately, joining their edges to form the full image during playback. Two functionally identical versions of this concept, slices and tiles, exist within the HEVC standard, but slices are limited to chunking the video into wide strips while tiles can divide a video into rectangular CTU-based (Coding Tree Unit) areas of any size.
-Tiles are supported by most decoders, but among publicly available encoders only a few software encoders support tile-based encoding with user-defined tile sizes. These software encoders are far too slow for live streaming.
+HEVC is the state-of-the-art video compression standard; however, the encoding process is computationally expensive and not easily parallelized. Instead, encoders divide each frame of the video into independent regions and encode them separately, joining their edges during playback. Two functionally identical versions of this concept, slices and tiles, exist within the HEVC standard, but slices are limited to horizontal strips while tiles are rectangular CTU-based areas of any size.
+Tiles are supported by most decoders, but only a few available software encoders support tile-based encoding with user-defined tile sizes. These encoders are far too slow for live streaming.
 
 HEVC bitstreams consist of sequential NAL (Network Abstraction Layer) units with header and data components.
 Each slice or tile in the frame is encoded as a single NAL unit, where the encoder does never create motion vectors that cross slice or tile boundaries. Visible boundaries are prevented by a de-blocking filter.
@@ -46,41 +46,41 @@ To interact with NVENC, we use a custom version of the libavcodec API provided b
 
 \subsection{Stitching}
 
-The bitstreams from the encoding step will contain $(k \cdot n)+1$ NAL units per frame, one for each tile and a single SEI at the end, but these will still be arranged in a vertical stack. To pick tiles from either quality and place them in the final image, we must modify several fields in the NAL headers. Table~\ref{tab:stitch} lists all such fields. Two additional changes are necessary on behalf of emulation prevention bytes and byte alignment. A bit sequence is byte-aligned if its first bit occurs on a byte boundary and its last bit occurs directly before a byte boundary. NAL borders are represented by the byte-aligned sequence \texttt{0x000001}. To prevent this sequence from occurring by chance within a NAL, the byte-aligned sequence \texttt{0x03}, referred to as the emulation prevention byte, may be inserted after any byte-aligned \texttt{0x0000} which is not part of a NAL border. The emulation prevention byte does not otherwise impact the NAL parsing process, and decoders will simply skip over it.
+The bitstreams from the encoding step will contain $(k \cdot n)+1$ NAL units per frame, one for each tile and a single SEI at the end, but these will still be arranged in a vertical stack. To pick tiles from either quality and place them in the final image, we must modify the image dimensions in the SPS, the tile configuration in the PPS, and the tile CTU address within each tile header. Furthermore, a bit sequence is a byte-aligned sequence (BAS) if its first bit occurs on a byte boundary and its length is a multiple of 8. NAL borders are represented by the BAS \texttt{0x000001}. To prevent this sequence from occurring by chance within a NAL, the BAS \texttt{0x03}, referred to as the emulation prevention byte (EPB), may be inserted after any BAS \texttt{0x0000} which is not part of a NAL border. The EPB does not otherwise impact the NAL parsing process, and decoders will simply skip over it.
 %over it when encountered.
 
-If the stitching process modifies the number of bits in the NAL header, e.g by inserting a new field or changing an unsigned Exponential Golomb coded value, any emulation prevention bytes appearing after the point of change will likely cease to be byte-aligned. The decoder will then consider these bits to have semantic value, resulting in a corrupt or incorrect header. We must also ensure that the stitching process does not introduce any new \texttt{0x0000} sequences without a trailing emulation prevention byte. To tackle both of these issues at once, we discard all emulation prevention bytes in the original NAL header before making any modifications, then check for byte-aligned \texttt{0x0000} sequences afterwards, inserting emulation prevention bytes as necessary. This procedure is not performed on NAL data because it is not modified, and byte alignment will be performed at the end of the header.
+If the stitching process modifies the number of bits in the NAL header, e.g by inserting a new field or changing an unsigned Exponential Golomb coded value, any EPBs appearing after the point of change will likely cease to be BASes. The decoder will then consider these bits to have semantic value, resulting in a corrupt or incorrect header. We must also ensure that the stitching process does not introduce any new BAS \texttt{0x0000} without a trailing EPB. To tackle both of these issues at once, we discard all EPBs in the original NAL header before making any modifications, then check for any BAS \texttt{0x0000} afterwards, inserting EPBs as necessary. This procedure is not performed on NAL data because it is not modified, and byte alignment will be performed at the end of the header.
 
-After the last semantic bit in a NAL header or body, byte alignment is performed by appending a \texttt{1} followed by as many \texttt{0}s necessary to complete the byte. As is the case with emulation prevention bytes, if the size of the NAL header changes during modification, we will likely have an incorrect number of trailing \texttt{0}s. To redo the byte alignment, we find the last \texttt{1} in the original NAL component and remove it and everything after it, effectively undoing the previous byte alignment. We then perform byte alignment after our modifications have been made.
+After the last semantic bit in a NAL header or body, byte alignment is performed by appending a \texttt{1} followed by as many \texttt{0}s necessary to complete the byte. As is the case with EPBs, if the size of the NAL header changes during modification, we will likely have an incorrect number of trailing \texttt{0}s. To redo the byte alignment, we find the last \texttt{1} in the original NAL component and remove it and everything after it, effectively undoing the previous byte alignment. We then perform byte alignment after our modifications have been made.
 
 The stitching process uses the Boost C++ dynamic\_bitstream API~\footnote{https://www.boost.org}, which allows one to read bytes into a vector of bits, manipulate these bits, then convert the bit vector back into raw bytes. The high- and low-bitrate configurations are identical except for the specified bitrate, so the output from NVENC is highly predictable. Navigating to the right spot in the bitstream and making our changes is thus a straightforward process.
 
-\setcounter{figure}{1}
-\begin{table}
-	\begin{tabularx}{\columnwidth}{ll}
-		\toprule
-		NAL Type & Field \\
-		\midrule
-		%\multirow{2}{*}[-.3em]{SPS} & \texttt{pic\_width\_in\_luma\_samples} & & \\
-		SPS & \texttt{pic\_width\_in\_luma\_samples} \\
-		 & \texttt{pic\_height\_in\_luma\_samples}  \\
-		\midrule
-		PPS & \texttt{tiles\_enabled\_flag}  \\
-		& \texttt{num\_tile\_columns\_minus1}  \\
-		& \texttt{num\_tile\_rows\_minus1}  \\
-		& \texttt{uniform\_spacing\_flag}  \\
-		\midrule
-		I-frame, & \texttt{first\_slice\_segment\_in\_pic\_flag} \\
-		P-frame & \texttt{slice\_segment\_address}  \\
-		& \texttt{num\_entry\_point\_offsets}  \\
-		\bottomrule
-	\end{tabularx}
-	\caption{All NAL header fields requiring modification.}
-\label{tab:stitch}
-\end{table}
-%\vspace{-10pt}
-\renewcommand{\figurename}{Fig.}
-\setcounter{figure}{1}
+%\setcounter{figure}{1}
+%\begin{table}
+%	\begin{tabularx}{\columnwidth}{ll}
+%		\toprule
+%		NAL Type & Field \\
+%		\midrule
+%		%\multirow{2}{*}[-.3em]{SPS} & \texttt{pic\_width\_in\_luma\_samples} & & \\
+%		SPS & \texttt{pic\_width\_in\_luma\_samples} \\
+%		 & \texttt{pic\_height\_in\_luma\_samples}  \\
+%		\midrule
+%		PPS & \texttt{tiles\_enabled\_flag}  \\
+%		& \texttt{num\_tile\_columns\_minus1}  \\
+%		& \texttt{num\_tile\_rows\_minus1}  \\
+%		& \texttt{uniform\_spacing\_flag}  \\
+%		\midrule
+%		I-frame, & \texttt{first\_slice\_segment\_in\_pic\_flag} \\
+%		P-frame & \texttt{slice\_segment\_address}  \\
+%		& \texttt{num\_entry\_point\_offsets}  \\
+%		\bottomrule
+%	\end{tabularx}
+%	\caption{All NAL header fields requiring modification.}
+%\label{tab:stitch}
+%\end{table}
+%%\vspace{-10pt}
+%\renewcommand{\figurename}{Fig.}
+%\setcounter{figure}{1}
 
 We are creating  entire videos with GOP lengths of 16. This implies an average quality change duration of 8 seconds, which can be reduced by reducing the GOP length. While adapting much slower than our earlier work~\cite{ism-2018}, it can work with arbitrary clients. NVenc does not generate SI or SP frames for faster transitions.
 

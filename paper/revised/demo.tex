@@ -1,15 +1,15 @@
 %\vspace{-20pt}
 \section{RATS demonstration} \label{infra}
 
-We will demonstrate RATS using a single laptop on the server side with a built-in consumer-grade GPU. We will use stored video and live recording from a directly attached camera. Our demo will focus on the visual differences that are incurred when the number of tiles, as well as the tile pattern of encoding profiles changes.
+We will demonstrate RATS using a single laptop on the server side with a built-in consumer-grade GPU. We will use stored video and live recording from a directly attached camera. Our demo will focus on the visual differences that are incurred when the number of tiles, as well as the tile pattern of encoding profiles, changes.
 
 % We circumvent the limitations of the GPU and are thereby able to generate videos compliant with the advanced tiling scheme of HEVC.
-The visitor of the demo will be able to observe the changes on an arbitrary computer using any browser that supports Javascript Media Source Extensions and HEVC decoding.
-The infrastructure that is used to deliver the encoded video via HTTP adaptive streaming is comprised of open-source software: Nginx\footnote{https://github.com/nginx/nginx}, Kaltura nginx-vod-module\footnote{https://github.com/kaltura/nginx-vod-module} and MediaElement.js\footnote{https://www.mediaelementjs.com}.
+The visitor of the demo will be able to observe the changes on an arbitrary computer using any browser that supports JavaScript Media Source Extensions and HEVC decoding.
+The infrastructure used to deliver the encoded video via HTTP adaptive streaming is comprised of open-source software: Nginx\footnote{https://github.com/nginx/nginx}, Kaltura nginx-vod-module\footnote{https://github.com/kaltura/nginx-vod-module} and MediaElement.js\footnote{https://www.mediaelementjs.com}.
 
 The solution that we present in this demo using MediaElement.js relies on tile stitching before delivery of the video to an end-system.	
 This is not the only possible approach, as DASH provides the extension DASH-SRD (spatial relationship description), which allows a client to individually access tile streams, synchronize them, and make independent quality choices for each of them~\cite{niamut2016}.
-However, existing DASH-SRD players make dynamic adaptation choices internally, whereas it is our goal to fully control tile configurations and demonstrate visual differences between them.
+However, existing DASH-SRD players make dynamic adaptation choices internally, whereas our goal is to fully control tile configurations and demonstrate visual differences between them.
 
 
 %\begin{itemize}

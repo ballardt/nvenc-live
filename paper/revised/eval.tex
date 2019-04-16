@@ -23,7 +23,7 @@
 \end{figure*}
 To evaluate RATS, we analyze its performance across multiple tile configurations. In particular, we consider the encoding speed, output file size, and the quality of the final image.
 %
-Examining Figs.~\ref{fig:time} and \ref{fig:size}, we see that the number of tile columns is the primary factor affecting encoder performance. Note that the number of columns dictates the number of sub-images necessary, each of which requires two more NVENC encodes per frame, multiple stitching operations, and column stacking of the source image. In contrast, the hardware encoder supports tile rows using Slice mode. Slice mode incurs additional computation costs only when alignment rules force us to crop the source image.
+Examining Figs.~\ref{fig:time} and \ref{fig:size}, we see that the number of tile columns is the primary factor affecting encoder performance. Note that the number of columns dictates how many sub-images are necessary, each of which requires two more NVENC encodes per frame, multiple stitching operations, and column stacking of the source image. In contrast, the hardware encoder supports tile rows using slice mode 3. Slice mode 3 incurs additional computation costs only when alignment rules force us to crop the source image.
 
 Fig.~\ref{fig:time} confirms that RATS easily satisfies our real-time requirement, finishing the encode and stitch process in one-third of the total video time in the worst case tested.
 The small jump from 1 to 2 columns is due to a required source image transformation, both before encoding and afterwards in stitching.
