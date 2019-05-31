@@ -1,0 +1,149 @@
+%%% -*-BibTeX-*-
+%%% Do NOT edit. File created by BibTeX with style
+%%% ACM-Reference-Format-Journals [18-Jan-2012].
+
+\begin{thebibliography}{8}
+
+%%% ====================================================================
+%%% NOTE TO THE USER: you can override these defaults by providing
+%%% customized versions of any of these macros before the \bibliography
+%%% command.  Each of them MUST provide its own final punctuation,
+%%% except for \shownote{}, \showDOI{}, and \showURL{}.  The latter two
+%%% do not use final punctuation, in order to avoid confusing it with
+%%% the Web address.
+%%%
+%%% To suppress output of a particular field, define its macro to expand
+%%% to an empty string, or better, \unskip, like this:
+%%%
+%%% \newcommand{\showDOI}[1]{\unskip}   % LaTeX syntax
+%%%
+%%% \def \showDOI #1{\unskip}           % plain TeX syntax
+%%%
+%%% ====================================================================
+
+\ifx \showCODEN    \undefined \def \showCODEN     #1{\unskip}     \fi
+\ifx \showDOI      \undefined \def \showDOI       #1{#1}\fi
+\ifx \showISBNx    \undefined \def \showISBNx     #1{\unskip}     \fi
+\ifx \showISBNxiii \undefined \def \showISBNxiii  #1{\unskip}     \fi
+\ifx \showISSN     \undefined \def \showISSN      #1{\unskip}     \fi
+\ifx \showLCCN     \undefined \def \showLCCN      #1{\unskip}     \fi
+\ifx \shownote     \undefined \def \shownote      #1{#1}          \fi
+\ifx \showarticletitle \undefined \def \showarticletitle #1{#1}   \fi
+\ifx \showURL      \undefined \def \showURL       {\relax}        \fi
+% The following commands are used for tagged output and should be
+% invisible to TeX
+\providecommand\bibfield[2]{#2}
+\providecommand\bibinfo[2]{#2}
+\providecommand\natexlab[1]{#1}
+\providecommand\showeprint[2][]{arXiv:#2}
+
+\bibitem[\protect\citeauthoryear{Amon, Sapre, and Hutter}{Amon
+  et~al\mbox{.}}{2012}]%
+        {amon2012}
+\bibfield{author}{\bibinfo{person}{Peter Amon}, \bibinfo{person}{Madhurani
+  Sapre}, {and} \bibinfo{person}{Andreas Hutter}.}
+  \bibinfo{year}{2012}\natexlab{}.
+\newblock \showarticletitle{Compressed domain stitching of HEVC streams for
+  video conferencing applications}. In \bibinfo{booktitle}{\emph{Proc. of 19th
+  International Packet Video Workshop (PV)}}.
+\newblock
+
+
+\bibitem[\protect\citeauthoryear{Corbillon, Devlic, Simon, and
+  Chakareski}{Corbillon et~al\mbox{.}}{2017}]%
+        {corbillon2016}
+\bibfield{author}{\bibinfo{person}{Xavier Corbillon}, \bibinfo{person}{Alisa
+  Devlic}, \bibinfo{person}{Gwendal Simon}, {and} \bibinfo{person}{Jacob
+  Chakareski}.} \bibinfo{year}{2017}\natexlab{}.
+\newblock \showarticletitle{Viewport-Adaptive Navigable 360-Degree Video
+  Delivery}. In \bibinfo{booktitle}{\emph{Proc. of IEEE International
+  Conference on Communications (ICC 2017)}}.
+\newblock
+
+
+\bibitem[\protect\citeauthoryear{Feldmann, Bulla, and Cellarius}{Feldmann
+  et~al\mbox{.}}{2013}]%
+        {feldmann2013}
+\bibfield{author}{\bibinfo{person}{Christian Feldmann},
+  \bibinfo{person}{Christopher Bulla}, {and} \bibinfo{person}{Bastian
+  Cellarius}.} \bibinfo{year}{2013}\natexlab{}.
+\newblock \showarticletitle{Efficient stream-reassembling for video
+  conferencing applications using tiles in HEVC}. In
+  \bibinfo{booktitle}{\emph{Proc. of International Conferences on Advances in
+  Multimedia (MMEDIA)}}.
+\newblock
+
+
+\bibitem[\protect\citeauthoryear{Griwodz, Jeppsson, Espeland, Kupka, Langseth,
+  Petlund, Qiaoqiao, Xue, Pogorelov, Riegler, Johansen, and Halvorsen}{Griwodz
+  et~al\mbox{.}}{2018}]%
+        {ism-2018}
+\bibfield{author}{\bibinfo{person}{Carsten Griwodz}, \bibinfo{person}{Mattis
+  Jeppsson}, \bibinfo{person}{H{\aa}vard Espeland}, \bibinfo{person}{Tomas
+  Kupka}, \bibinfo{person}{Ragnar Langseth}, \bibinfo{person}{Andreas Petlund},
+  \bibinfo{person}{Peng Qiaoqiao}, \bibinfo{person}{Chuansong Xue},
+  \bibinfo{person}{Konstantin Pogorelov}, \bibinfo{person}{Michael Riegler},
+  \bibinfo{person}{Dag Johansen}, {and} \bibinfo{person}{P{\aa}l Halvorsen}.}
+  \bibinfo{year}{2018}\natexlab{}.
+\newblock \showarticletitle{Efficient Live and on-Demand Tiled {HEVC} 360 {VR}
+  Video Streaming}. In \bibinfo{booktitle}{\emph{2018 {IEEE} International
+  Symposium on Multimedia, {ISM} 2018, Taichung, Taiwan, December 10-12,
+  2018}}. \bibinfo{publisher}{{IEEE} Computer Society},
+  \bibinfo{pages}{81--88}.
+\newblock
+\urldef\tempurl%
+\url{https://doi.org/10.1109/ISM.2018.00022}
+\showDOI{\tempurl}
+
+
+\bibitem[\protect\citeauthoryear{Le~Feuvre and Concolato}{Le~Feuvre and
+  Concolato}{2016}]%
+        {lefeuvre2016}
+\bibfield{author}{\bibinfo{person}{Jean Le~Feuvre} {and} \bibinfo{person}{Cyril
+  Concolato}.} \bibinfo{year}{2016}\natexlab{}.
+\newblock \showarticletitle{Tiled-based Adaptive Streaming Using MPEG-DASH}. In
+  \bibinfo{booktitle}{\emph{Proceedings of the 7th International Conference on
+  Multimedia Systems}} \emph{(\bibinfo{series}{MMSys '16})}.
+\newblock
+
+
+\bibitem[\protect\citeauthoryear{Niamut, Thomas, D'Acunto, Concolato, Denoual,
+  and Lim}{Niamut et~al\mbox{.}}{2016}]%
+        {niamut2016}
+\bibfield{author}{\bibinfo{person}{Omar~A. Niamut}, \bibinfo{person}{Emmanuel
+  Thomas}, \bibinfo{person}{Lucia D'Acunto}, \bibinfo{person}{Cyril Concolato},
+  \bibinfo{person}{Franck Denoual}, {and} \bibinfo{person}{Seong~Yong Lim}.}
+  \bibinfo{year}{2016}\natexlab{}.
+\newblock \showarticletitle{MPEG DASH SRD: Spatial Relationship Description}.
+  In \bibinfo{booktitle}{\emph{Proc. of the 7th International Conference on
+  Multimedia Systems}} \emph{(\bibinfo{series}{MMSys '16})}.
+\newblock
+
+
+\bibitem[\protect\citeauthoryear{Petrangeli, Swaminathan, Hosseini, and
+  Turck}{Petrangeli et~al\mbox{.}}{2017}]%
+        {PetrangeliSHT17}
+\bibfield{author}{\bibinfo{person}{Stefano Petrangeli},
+  \bibinfo{person}{Viswanathan Swaminathan}, \bibinfo{person}{Mohammad
+  Hosseini}, {and} \bibinfo{person}{Filip~De Turck}.}
+  \bibinfo{year}{2017}\natexlab{}.
+\newblock \showarticletitle{An HTTP/2-Based Adaptive Streaming Framework for
+  360{\textdegree} Virtual Reality Videos}. In \bibinfo{booktitle}{\emph{Proc.
+  of the {ACM} Conference on Multimedia}}. \bibinfo{pages}{306--314}.
+\newblock
+
+
+\bibitem[\protect\citeauthoryear{S{\'a}nchez de~la Fuente, Skupin, and
+  Schierl}{S{\'a}nchez de~la Fuente et~al\mbox{.}}{2017}]%
+        {delafuente2017}
+\bibfield{author}{\bibinfo{person}{Y. S{\'a}nchez de~la Fuente},
+  \bibinfo{person}{R. Skupin}, {and} \bibinfo{person}{T. Schierl}.}
+  \bibinfo{year}{2017}\natexlab{}.
+\newblock \showarticletitle{Video processing for panoramic streaming using HEVC
+  and its scalable extensions}.
+\newblock \bibinfo{journal}{\emph{Multimedia Tools and Applications}}
+  (\bibinfo{year}{2017}).
+\newblock
+
+
+\end{thebibliography}

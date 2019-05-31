@@ -1,0 +1,382 @@
+%%% ====================================================================
+%%%  BibTeX-file{
+%%%     author          = "Gerry Murray",
+%%%     version         = "1.2",
+%%%     date            = "2 April 2012",
+%%%     filename        = "acmsmall-sample-bibfile.bib",
+%%%     address         = "ACM, NY",
+%%%     email           = "murray at hq.acm.org",
+%%%     codetable       = "ISO/ASCII",
+%%%     keywords        = "ACM Reference Format, bibliography, citation, references",
+%%%     supported       = "yes",
+%%%     docstring       = "This BibTeX database file contains 'bibdata' entries
+%%%                        that 'match' the examples provided in the Specifications Document
+%%%                        AND, also, 'legacy'-type bibs. It should assist authors in
+%%%                        choosing the 'correct' at-bibtype and necessary bib-fields
+%%%                        so as to obtain the appropriate ACM Reference Format output.
+%%%                        It also contains many 'Standard Abbreviations'. "
+%%%  }
+%%% ====================================================================
+
+% Journals
+
+% First the Full Name is given, then the abbreviation used in the AMS Math
+% Reviews, with an indication if it could not be found there.
+% Note the 2nd overwrites the 1st, so swap them if you want the full name.
+
+ %{AMS}
+ @String{AMSTrans = "American Mathematical Society Translations" }
+ @String{AMSTrans = "Amer. Math. Soc. Transl." }
+ @String{BullAMS = "Bulletin of the American Mathematical Society" }
+ @String{BullAMS = "Bull. Amer. Math. Soc." }
+ @String{ProcAMS = "Proceedings of the American Mathematical Society" }
+ @String{ProcAMS = "Proc. Amer. Math. Soc." }
+ @String{TransAMS = "Transactions of the American Mathematical Society" }
+ @String{TransAMS = "Trans. Amer. Math. Soc." }
+
+ %ACM
+ @String{CACM = "Communications of the {ACM}" }
+ @String{CACM = "Commun. {ACM}" }
+ @String{CompServ = "Comput. Surveys" }
+ @String{JACM = "J. ACM" }
+ @String{ACMMathSoft = "{ACM} Transactions on Mathematical Software" }
+ @String{ACMMathSoft = "{ACM} Trans. Math. Software" }
+ @String{SIGNUM = "{ACM} {SIGNUM} Newsletter" }
+ @String{SIGNUM = "{ACM} {SIGNUM} Newslett." }
+
+ @String{AmerSocio = "American Journal of Sociology" }
+ @String{AmerStatAssoc = "Journal of the American Statistical Association" }
+ @String{AmerStatAssoc = "J. Amer. Statist. Assoc." }
+ @String{ApplMathComp = "Applied Mathematics and Computation" }
+ @String{ApplMathComp = "Appl. Math. Comput." }
+ @String{AmerMathMonthly = "American Mathematical Monthly" }
+ @String{AmerMathMonthly = "Amer. Math. Monthly" }
+ @String{BIT = "{BIT}" }
+ @String{BritStatPsych = "British Journal of Mathematical and Statistical
+          Psychology" }
+ @String{BritStatPsych = "Brit. J. Math. Statist. Psych." }
+ @String{CanMathBull = "Canadian Mathematical Bulletin" }
+ @String{CanMathBull = "Canad. Math. Bull." }
+ @String{CompApplMath = "Journal of Computational and Applied Mathematics" }
+ @String{CompApplMath = "J. Comput. Appl. Math." }
+ @String{CompPhys = "Journal of Computational Physics" }
+ @String{CompPhys = "J. Comput. Phys." }
+ @String{CompStruct = "Computers and Structures" }
+ @String{CompStruct = "Comput. \& Structures" }
+ @String{CompJour = "The Computer Journal" }
+ @String{CompJour = "Comput. J." }
+ @String{CompSysSci = "Journal of Computer and System Sciences" }
+ @String{CompSysSci = "J. Comput. System Sci." }
+ @String{Computing = "Computing" }
+ @String{ContempMath = "Contemporary Mathematics" }
+ @String{ContempMath = "Contemp. Math." }
+ @String{Crelle = "Crelle's Journal" }
+ @String{GiornaleMath = "Giornale di Mathematiche" }
+ @String{GiornaleMath = "Giorn. Mat." } % didn't find in AMS MR., ibid.
+
+ %IEEE
+ @String{Computer = "{IEEE} Computer" }
+ @String{IEEETransComp = "{IEEE} Transactions on Computers" }
+ @String{IEEETransComp = "{IEEE} Trans. Comput." }
+ @String{IEEETransAC = "{IEEE} Transactions on Automatic Control" }
+ @String{IEEETransAC = "{IEEE} Trans. Automat. Control" }
+ @String{IEEESpec = "{IEEE} Spectrum" } % didn't find in AMS MR
+ @String{ProcIEEE = "Proceedings of the {IEEE}" }
+ @String{ProcIEEE = "Proc. {IEEE}" } % didn't find in AMS MR
+ @String{IEEETransAeroElec = "{IEEE} Transactions on Aerospace and Electronic
+     Systems" }
+ @String{IEEETransAeroElec = "{IEEE} Trans. Aerospace Electron. Systems" }
+
+ @String{IMANumerAna = "{IMA} Journal of Numerical Analysis" }
+ @String{IMANumerAna = "{IMA} J. Numer. Anal." }
+ @String{InfProcLet = "Information Processing Letters" }
+ @String{InfProcLet = "Inform. Process. Lett." }
+ @String{InstMathApp = "Journal of the Institute of Mathematics and
+     its Applications" }
+ @String{InstMathApp = "J. Inst. Math. Appl." }
+ @String{IntControl = "International Journal of Control" }
+ @String{IntControl = "Internat. J. Control" }
+ @String{IntNumerEng = "International Journal for Numerical Methods in
+     Engineering" }
+ @String{IntNumerEng = "Internat. J. Numer. Methods Engrg." }
+ @String{IntSuper = "International Journal of Supercomputing Applications" }
+ @String{IntSuper = "Internat. J. Supercomputing Applic." } % didn't find
+%% in AMS MR
+ @String{Kibernetika = "Kibernetika" }
+ @String{JResNatBurStand = "Journal of Research of the National Bureau
+     of Standards" }
+ @String{JResNatBurStand = "J. Res. Nat. Bur. Standards" }
+ @String{LinAlgApp = "Linear Algebra and its Applications" }
+ @String{LinAlgApp = "Linear Algebra Appl." }
+ @String{MathAnaAppl = "Journal of Mathematical Analysis and Applications" }
+ @String{MathAnaAppl = "J. Math. Anal. Appl." }
+ @String{MathAnnalen = "Mathematische Annalen" }
+ @String{MathAnnalen = "Math. Ann." }
+ @String{MathPhys = "Journal of Mathematical Physics" }
+ @String{MathPhys = "J. Math. Phys." }
+ @String{MathComp = "Mathematics of Computation" }
+ @String{MathComp = "Math. Comp." }
+ @String{MathScand = "Mathematica Scandinavica" }
+ @String{MathScand = "Math. Scand." }
+ @String{TablesAidsComp = "Mathematical Tables and Other Aids to Computation" }
+ @String{TablesAidsComp = "Math. Tables Aids Comput." }
+ @String{NumerMath = "Numerische Mathematik" }
+ @String{NumerMath = "Numer. Math." }
+ @String{PacificMath = "Pacific Journal of Mathematics" }
+ @String{PacificMath = "Pacific J. Math." }
+ @String{ParDistComp = "Journal of Parallel and Distributed Computing" }
+ @String{ParDistComp = "J. Parallel and Distrib. Comput." } % didn't find
+%% in AMS MR
+ @String{ParComputing = "Parallel Computing" }
+ @String{ParComputing = "Parallel Comput." }
+ @String{PhilMag = "Philosophical Magazine" }
+ @String{PhilMag = "Philos. Mag." }
+ @String{ProcNAS = "Proceedings of the National Academy of Sciences
+                    of the USA" }
+ @String{ProcNAS = "Proc. Nat. Acad. Sci. U. S. A." }
+ @String{Psychometrika = "Psychometrika" }
+ @String{QuartMath = "Quarterly Journal of Mathematics, Oxford, Series (2)" }
+ @String{QuartMath = "Quart. J. Math. Oxford Ser. (2)" }
+ @String{QuartApplMath = "Quarterly of Applied Mathematics" }
+ @String{QuartApplMath = "Quart. Appl. Math." }
+ @String{RevueInstStat = "Review of the International Statisical Institute" }
+ @String{RevueInstStat = "Rev. Inst. Internat. Statist." }
+
+ %SIAM
+ @String{JSIAM = "Journal of the Society for Industrial and Applied
+     Mathematics" }
+ @String{JSIAM = "J. Soc. Indust. Appl. Math." }
+ @String{JSIAMB = "Journal of the Society for Industrial and Applied
+     Mathematics, Series B, Numerical Analysis" }
+ @String{JSIAMB = "J. Soc. Indust. Appl. Math. Ser. B Numer. Anal." }
+ @String{SIAMAlgMeth = "{SIAM} Journal on Algebraic and Discrete Methods" }
+ @String{SIAMAlgMeth = "{SIAM} J. Algebraic Discrete Methods" }
+ @String{SIAMAppMath = "{SIAM} Journal on Applied Mathematics" }
+ @String{SIAMAppMath = "{SIAM} J. Appl. Math." }
+ @String{SIAMComp = "{SIAM} Journal on Computing" }
+ @String{SIAMComp = "{SIAM} J. Comput." }
+ @String{SIAMMatrix = "{SIAM} Journal on Matrix Analysis and Applications" }
+ @String{SIAMMatrix = "{SIAM} J. Matrix Anal. Appl." }
+ @String{SIAMNumAnal = "{SIAM} Journal on Numerical Analysis" }
+ @String{SIAMNumAnal = "{SIAM} J. Numer. Anal." }
+ @String{SIAMReview = "{SIAM} Review" }
+ @String{SIAMReview = "{SIAM} Rev." }
+ @String{SIAMSciStat = "{SIAM} Journal on Scientific and Statistical
+     Computing" }
+ @String{SIAMSciStat = "{SIAM} J. Sci. Statist. Comput." }
+
+ @String{SoftPracExp = "Software Practice and Experience" }
+ @String{SoftPracExp = "Software Prac. Experience" } % didn't find in AMS MR
+ @String{StatScience = "Statistical Science" }
+ @String{StatScience = "Statist. Sci." }
+ @String{Techno = "Technometrics" }
+ @String{USSRCompMathPhys = "{USSR} Computational Mathematics and Mathematical
+     Physics" }
+ @String{USSRCompMathPhys = "{U. S. S. R.} Comput. Math. and Math. Phys." }
+ @String{VLSICompSys = "Journal of {VLSI} and Computer Systems" }
+ @String{VLSICompSys = "J. {VLSI} Comput. Syst." }
+ @String{ZAngewMathMech = "Zeitschrift fur Angewandte Mathematik und
+     Mechanik" }
+ @String{ZAngewMathMech = "Z. Angew. Math. Mech." }
+ @String{ZAngewMathPhys = "Zeitschrift fur Angewandte Mathematik und Physik" }
+ @String{ZAngewMathPhys = "Z. Angew. Math. Phys." }
+
+% Publishers % ================================================= |
+
+ @String{Academic = "Academic Press" }
+ @String{ACMPress = "{ACM} Press" }
+ @String{AdamHilger = "Adam Hilger" }
+ @String{AddisonWesley = "Addison-Wesley" }
+ @String{AllynBacon = "Allyn and Bacon" }
+ @String{AMS = "American Mathematical Society" }
+ @String{Birkhauser = "Birkha{\"u}ser" }
+ @String{CambridgePress = "Cambridge University Press" }
+ @String{Chelsea = "Chelsea" }
+ @String{ClaredonPress = "Claredon Press" }
+ @String{DoverPub = "Dover Publications" }
+ @String{Eyolles = "Eyolles" }
+ @String{HoltRinehartWinston = "Holt, Rinehart and Winston" }
+ @String{Interscience = "Interscience" }
+ @String{JohnsHopkinsPress = "The Johns Hopkins University Press" }
+ @String{JohnWileySons = "John Wiley and Sons" }
+ @String{Macmillan = "Macmillan" }
+ @String{MathWorks = "The Math Works Inc." }
+ @String{McGrawHill = "McGraw-Hill" }
+ @String{NatBurStd = "National Bureau of Standards" }
+ @String{NorthHolland = "North-Holland" }
+ @String{OxfordPress = "Oxford University Press" }  %address Oxford or London?
+ @String{PergamonPress = "Pergamon Press" }
+ @String{PlenumPress = "Plenum Press" }
+ @String{PrenticeHall = "Prentice-Hall" }
+ @String{SIAMPub = "{SIAM} Publications" }
+ @String{Springer = "Springer-Verlag" }
+ @String{TexasPress = "University of Texas Press" }
+ @String{VanNostrand = "Van Nostrand" }
+ @String{WHFreeman = "W. H. Freeman and Co." }
+
+%Entries
+
+@inproceedings{lefeuvre2016,
+	author = {Le Feuvre, Jean and Concolato, Cyril},
+	title = {Tiled-based Adaptive Streaming Using MPEG-DASH},
+	booktitle = {Proceedings of the 7th International Conference on Multimedia Systems},
+	series = {MMSys '16},
+	year = {2016},
+	location = {Klagenfurt, Austria},
+}
+@inproceedings{lefeuvre2016-unused,
+	author = {Le Feuvre, Jean and Concolato, Cyril},
+	title = {Tiled-based Adaptive Streaming Using MPEG-DASH},
+	booktitle = {Proceedings of the 7th International Conference on Multimedia Systems},
+	series = {MMSys '16},
+	year = {2016},
+	isbn = {978-1-4503-4297-1},
+	location = {Klagenfurt, Austria},
+	pages = {41:1--41:3},
+	articleno = {41},
+	numpages = {3},
+	url = {http://doi.acm.org/10.1145/2910017.2910641},
+	doi = {10.1145/2910017.2910641},
+	acmid = {2910641},
+	publisher = {ACM},
+	address = {New York, NY, USA},
+	keywords = {HEVC, HTTP adaptive streaming, MPEG-DASH, spatial description, video tiling},
+}
+
+
+
+@inproceedings{corbillon2016,
+	author = {Corbillon, Xavier and Devlic, Alisa and Simon, Gwendal and Chakareski, Jacob},
+	year = {2017},
+	month={May},
+	pages = {},
+	title = {Viewport-Adaptive Navigable 360-Degree Video Delivery},
+	booktitle={Proc. of IEEE International Conference on Communications (ICC 2017)},
+}
+
+@inproceedings{corbillon2018,
+	title={Dynamic adaptive streaming for multi-viewpoint omnidirectional videos},
+	author={Corbillon, Xavier and De Simone, Francesca and Simon, Gwendal and Frossard, Pascal},
+	booktitle={Proc. of the 9th ACM Conference on Multimedia Systems},
+	year={2018},
+}
+@inproceedings{corbillon2018-unused,
+	title={Dynamic adaptive streaming for multi-viewpoint omnidirectional videos},
+	author={Corbillon, Xavier and De Simone, Francesca and Simon, Gwendal and Frossard, Pascal},
+	booktitle={Proceedings of the 9th ACM Multimedia Systems Conference},
+	pages={237--249},
+	year={2018},
+	organization={ACM}
+}
+
+
+@inproceedings{amon2012,
+	title={Compressed domain stitching of HEVC streams for video conferencing applications},
+	author={Amon, Peter and Sapre, Madhurani and Hutter, Andreas},
+	booktitle={Proc. of 19th International Packet Video Workshop (PV)},
+  year      = {2012},
+}
+@inproceedings{amon2012-unsused,
+	title={Compressed domain stitching of HEVC streams for video conferencing applications},
+	author={Amon, Peter and Sapre, Madhurani and Hutter, Andreas},
+	booktitle={2012 19th International Packet Video Workshop (PV)},
+	pages={36--40},
+	year={2012},
+	publisher={IEEE},
+	location={Munich, Germany},
+	address={New York, NY, USA},
+	url={https://ieeexplore.ieee.org/document/6229742}
+}
+
+@inproceedings{feldmann2013,
+	title={Efficient stream-reassembling for video conferencing applications using tiles in HEVC},
+	author={Feldmann, Christian and Bulla, Christopher and Cellarius, Bastian},
+	booktitle={Proc. of International Conferences on Advances in Multimedia (MMEDIA)},
+	year={2013}
+}
+
+@Article{delafuente2017,
+	author={S{\'a}nchez de la Fuente, Y. and Skupin, R. and Schierl, T.},
+	title={Video processing for panoramic streaming using HEVC and its scalable extensions},
+	journal={Multimedia Tools and Applications},
+	year={2017},
+}
+@Article{delafuente2017-unused,
+	author={S{\'a}nchez de la Fuente, Y. and Skupin, R. and Schierl, T.},
+	title={Video processing for panoramic streaming using HEVC and its scalable extensions},
+	journal={Multimedia Tools and Applications},
+	year={2017},
+	month="Feb",
+	day="01",
+	volume="76",
+	number="4",
+	pages="5631--5659",
+	issn="1573-7721",
+	doi="10.1007/s11042-016-4097-4",
+	url="https://doi.org/10.1007/s11042-016-4097-4"
+}
+
+@inproceedings{niamut2016,
+	author = {Niamut, Omar A. and Thomas, Emmanuel and D'Acunto, Lucia and Concolato, Cyril and Denoual, Franck and Lim, Seong Yong},
+	title = {MPEG DASH SRD: Spatial Relationship Description},
+	booktitle = {Proc. of the 7th International Conference on Multimedia Systems},
+	series = {MMSys '16},
+	year = {2016},
+	location = {Klagenfurt, Austria},
+}
+@inproceedings{niamut2016-unused,
+	author = {Niamut, Omar A. and Thomas, Emmanuel and D'Acunto, Lucia and Concolato, Cyril and Denoual, Franck and Lim, Seong Yong},
+	title = {MPEG DASH SRD: Spatial Relationship Description},
+	booktitle = {Proceedings of the 7th International Conference on Multimedia Systems},
+	series = {MMSys '16},
+	year = {2016},
+	isbn = {978-1-4503-4297-1},
+	location = {Klagenfurt, Austria},
+	pages = {5:1--5:8},
+	articleno = {5},
+	numpages = {8},
+	url = {http://doi.acm.org/10.1145/2910017.2910606},
+	doi = {10.1145/2910017.2910606},
+	acmid = {2910606},
+	publisher = {ACM},
+	address = {New York, NY, USA},
+	keywords = {MPEG-DASH, mobile video, standards, streaming, tiled streaming, ultra-high definition, video},
+}
+
+@inproceedings{PetrangeliSHT17,
+  author    = {Stefano Petrangeli and
+               Viswanathan Swaminathan and
+               Mohammad Hosseini and
+               Filip De Turck},
+  title     = {An HTTP/2-Based Adaptive Streaming Framework for 360{\textdegree}
+               Virtual Reality Videos},
+  booktitle = {Proc. of the {ACM} Conference on Multimedia},
+  pages     = {306--314},
+  year      = {2017},
+}
+
+@inproceedings{ism-2018,
+  author    = {Carsten Griwodz and
+               Mattis Jeppsson and
+               H{\aa}vard Espeland and
+               Tomas Kupka and
+               Ragnar Langseth and
+               Andreas Petlund and
+               Peng Qiaoqiao and
+               Chuansong Xue and
+               Konstantin Pogorelov and
+               Michael Riegler and
+               Dag Johansen and
+               P{\aa}l Halvorsen},
+  title     = {Efficient Live and on-Demand Tiled {HEVC} 360 {VR} Video Streaming},
+  booktitle = {2018 {IEEE} International Symposium on Multimedia, {ISM} 2018, Taichung,
+               Taiwan, December 10-12, 2018},
+  pages     = {81--88},
+  publisher = {{IEEE} Computer Society},
+  year      = {2018},
+  url       = {https://doi.org/10.1109/ISM.2018.00022},
+  doi       = {10.1109/ISM.2018.00022},
+  timestamp = {Tue, 12 Feb 2019 15:51:40 +0100},
+  biburl    = {https://dblp.org/rec/bib/conf/ism/GriwodzJEKLPQXP18},
+  bibsource = {dblp computer science bibliography, https://dblp.org}
+}

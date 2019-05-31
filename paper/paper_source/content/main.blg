@@ -1,0 +1,73 @@
+This is BibTeX, Version 0.99d (TeX Live 2017/Debian)
+Capacity: max_strings=100000, hash_size=100000, hash_prime=85009
+The top-level auxiliary file: main.aux
+The style file: ACM-Reference-Format.bst
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Reallocated wiz_functions (elt_size=4) to 6000 items from 3000.
+Database file #1: bibliography.bib
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Reallocated glb_str_ptr (elt_size=4) to 20 items from 10.
+Reallocated global_strs (elt_size=20001) to 20 items from 10.
+Reallocated glb_str_end (elt_size=4) to 20 items from 10.
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Warning--empty publisher in amon2012
+Warning--empty address in amon2012
+Warning--page numbers missing in both pages and numpages fields in amon2012
+Warning--empty publisher in corbillon2016
+Warning--empty address in corbillon2016
+Warning--empty publisher in feldmann2013
+Warning--empty address in feldmann2013
+Warning--page numbers missing in both pages and numpages fields in feldmann2013
+Warning--empty address in ism-2018
+Warning--empty publisher in lefeuvre2016
+Warning--empty address in lefeuvre2016
+Warning--page numbers missing in both pages and numpages fields in lefeuvre2016
+Warning--empty publisher in niamut2016
+Warning--empty address in niamut2016
+Warning--page numbers missing in both pages and numpages fields in niamut2016
+Warning--empty publisher in PetrangeliSHT17
+Warning--empty address in PetrangeliSHT17
+Warning--no number and no volume in delafuente2017
+Warning--page numbers missing in both pages and numpages fields in delafuente2017
+You've used 8 entries,
+            5733 wiz_defined-function locations,
+            1491 strings with 18503 characters,
+and the built_in function-call counts, 9733 in all, are:
+= -- 954
+> -- 479
+< -- 0
++ -- 162
+- -- 156
+* -- 777
+:= -- 1051
+add.period$ -- 35
+call.type$ -- 8
+change.case$ -- 69
+chr.to.int$ -- 8
+cite$ -- 27
+duplicate$ -- 867
+empty$ -- 606
+format.name$ -- 188
+if$ -- 2221
+int.to.chr$ -- 2
+int.to.str$ -- 1
+missing$ -- 39
+newline$ -- 100
+num.names$ -- 64
+pop$ -- 420
+preamble$ -- 1
+purify$ -- 141
+quote$ -- 0
+skip$ -- 292
+stack$ -- 0
+substring$ -- 548
+swap$ -- 62
+text.length$ -- 0
+text.prefix$ -- 0
+top$ -- 0
+type$ -- 226
+warning$ -- 19
+while$ -- 42
+width$ -- 0
+write$ -- 168
+(There were 19 warnings)
