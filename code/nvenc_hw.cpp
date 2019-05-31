@@ -57,13 +57,24 @@ void Hardware::initialize()
 		printf("Codec hevc_nvenc not found\n");
 		exit(1);
 	}
-	// Create the hardware context
+
 	int result;
-	result = av_hwdevice_ctx_create(&hwDeviceCtx, hwDeviceType, NULL, NULL, 0);
+
+    AVDictionary *dict = NULL;
+    result = av_dict_set(&dict, "forced_idr", "1", 0);
+    if( result < 0 ) {
+		printf("Failed to create a dictionary entry for forced IDR\n");
+		exit(1);
+    }
+
+	// Create the hardware context
+	result = av_hwdevice_ctx_create(&hwDeviceCtx, hwDeviceType, NULL, dict, 0);
 	if (result < 0) {
 		printf("Failed to create HW device\n");
 		exit(1);
 	}
+
+    if( dict ) av_dict_free( &dict );
 }
 
 /**
@@ -114,7 +125,8 @@ AVCodecContext* Hardware::initializeContext(int bitrateValue, int width, int hei
 	c->time_base = (AVRational){1, 25};
 	// Image specifications
 	//c->gop_size = state->encoder_control->cfg.gop_len; // TODO this comes up as only 4?
-	c->gop_size = 16;
+	// c->gop_size = 16;
+	c->gop_size = 25;
 	c->pix_fmt = AV_PIX_FMT_YUV420P;
 	// Whether high or low bitrate
 	c->bit_rate = bitrateValue;
