@@ -13,6 +13,8 @@ target_include_directories(encode
     ${Boost_INCLUDE_DIRS}
     ${LIBAV_INCLUDE_DIRS})
 
+
 target_link_libraries(encode
-    ${LIBAV_LIBRARIES})
+    ${LIBAV_LIBRARIES}
+    pthread)
 

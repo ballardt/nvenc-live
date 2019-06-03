@@ -272,7 +272,7 @@ int main(int argc, char* argv[])
 	tiledBitstream = (unsigned char*)malloc(sizeof(unsigned char) * BITSTREAM_SIZE);
 
 	// The main loop. Get a frame, rearrange it, send it to NVENC, stitch it, then write it out.
-	while( outputFrame = fr->getNextFrame(ySize) )
+	while( outputFrame = fr->getNextFrame() )
     {
 		// config.height = paddedHeight;
         for( auto group : config.contextGroups )
@@ -283,6 +283,8 @@ int main(int argc, char* argv[])
                      outputFrame->v,
                      config.width/NUM_SPLITS,
                      paddedHeight*NUM_SPLITS );
+        fr->yieldFrame( outputFrame );
+
 		tiledBitstreamSize = doStitching(tiledBitstream,
                                          2,
                                          config.tileBitrates,

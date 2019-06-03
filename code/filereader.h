@@ -2,6 +2,10 @@
 
 #include <stdio.h>
 #include <vector>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <list>
 
 #include "nvenc_planeset.h"
 
@@ -13,9 +17,15 @@ public:
 
     bool ok() const;
 
-    Planeset* getNextFrame( int ySize );
+    Planeset* getNextFrame( );
+
+    void yieldFrame( Planeset* frame );
+
+    void run();
 
 private:
+    Planeset* readNextFrame( int ySize );
+
     /**
      * Cut a frame into columns and stack them on top of each other.
      */
@@ -30,15 +40,19 @@ private:
                                   int numSplits );
 
 private:
-    char*                  _filename;
-    FILE*                  _file;
-    size_t                 _orig_width;
-    size_t                 _orig_height;
-    size_t                 _padded_height;
-    int                    _num_splits;
-    size_t                 _stacked_width;
-    size_t                 _stacked_height;
-    Planeset*              _orig_cache;
-    std::vector<Planeset*> _stacked_cache;
+    char*                   _filename;
+    FILE*                   _file;
+    size_t                  _orig_width;
+    size_t                  _orig_height;
+    size_t                  _padded_height;
+    int                     _num_splits;
+    size_t                  _stacked_width;
+    size_t                  _stacked_height;
+    Planeset*               _orig_cache;
+    std::list<Planeset*>    _stacked_cache;
+    std::list<Planeset*>    _ready;
+    std::mutex              _stack_lock;
+    std::condition_variable _stack_cond;
+    std::thread*            _thread;
 };
 
