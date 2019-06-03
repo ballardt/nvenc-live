@@ -11,11 +11,12 @@ LDFLAGS= -O3 \
 	 -Wl,-rpath=/home/griff/Install/ffmpeg-nvenc/lib
 
 LIBRARIES=-lswscale -lavdevice -lavformat \
-          -lavcodec -lavutil -lswresample
+          -lavcodec -lavutil -lswresample \
+	  -lpthread
 
 all: encode
 
-encode: nvenc_hw.o nvenc_encode.o nvenc_config.o stitch.o context_group.o
+encode: nvenc_hw.o nvenc_encode.o nvenc_config.o stitch.o context_group.o filereader.o
 	g++ $(LDFLAGS) -o encode $^ $(LIBRARIES)
 
 %.o : %.cpp
