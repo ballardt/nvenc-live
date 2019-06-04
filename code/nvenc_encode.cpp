@@ -31,6 +31,8 @@ extern "C"
 #define BITSTREAM_SIZE 200000 // Increase if necessary; the program will let you know
 #define MAX_Y_HEIGHT 8192 // Hardware limitation
 
+#undef TRYHLS
+
 using namespace std;
 
 static int hardwareInitialized = 0;
@@ -106,6 +108,82 @@ int sendFrameToNVENC(Bitrate bitrate, int contextGroupIdx)
 	}
 }
 
+#ifdef TRYHLS
+void tryhls()
+{
+    AVFormatContext *oc;
+    ret = avformat_alloc_output_context2(&oc, NULL, "hls", "stream_%v.m3u8");
+    if( !oc )
+    {
+        fprintf(stderr, "Could not open output context with hls and name\n");
+        print_error("stream_%v.m3u8",ret);
+        return -1;
+    }
+
+    // not sure what this means or does - test later
+    oc->interrupt_callback = int_cb;
+
+    // -> calling av_dict_get
+    // -> num filtergraphs is 1
+    // -> num outputs is 2
+
+    init_output_filter(ofilter, o, oc);
+    // -> new_video_stream(o, oc, -1 );
+    //  -> new_output_stream(o, oc, AVMEDIA_TYPE_VIDEO, source_index);
+    //   -> AVStream* st = avformat_new_stream(oc, NULL);
+    //      st->id = 0; // or = 1
+    //    -> choose_encoder(o, oc, ost);
+    //     -> codec_id = av_guess_codec(s->oformat, NULL, s->url, NULL, ost->st->codecpar->codec_type);
+    //        ost->enc = avcodec_find_encoder(ost->st->codecpar->codec_id);
+    //        - or codec_name == "copy": ost->stream_copy = 1;
+
+    // ......
+
+    ret = avformat_init_output(of->ctx, &of->opts);
+    if (ret < 0) {
+        fprintf(stderr, "Could not initialize output file #%d "
+                        "(incorrect codec parameters ?): %s\n",
+                        file_index, av_err2str(ret));
+        return ret;
+    }
+    of->initialized = ret;
+    if (!ret) {
+        ret = avformat_write_header(of->ctx, &of->opts);
+            if (ret < 0) {
+                av_log(NULL, AV_LOG_ERROR, "Could not write header for output file #%d: %s\n", file_index, av_err2str(ret));
+        return ret;
+    }
+    of->initialized = of->header_written = 1;
+
+
+    const AVOutputFormat* fmt;
+    AVFormatContext*      oc;
+    AVStream*             video_st;
+
+    fmt = av_guess_format("hls", NULL, NULL);
+    if( !fmt )
+    {
+        fprintf(stderr, "Failed to guess HLS output\n");
+        exit(-1);
+    }
+    
+    fprintf(stderr, "Muxer format: %s\n", (fmt->name?fmt->name:"<none>") );
+
+    oc = avformat_alloc_context();
+    if (!oc)
+    {
+        fprintf(stderr, "Failed to allocate avformat context\n");
+        exit(-1);
+    }
+    fprintf(stderr, "Allocate an avformat context\n");
+    oc->oformat = (AVOutputFormat*)fmt;
+    snprintf(oc->filename, sizeof(oc->filename), "%s", "micro");
+    fprintf(stderr, "Set context name to %s\n", oc->filename);
+
+    exit( 1 );
+}
+
+#endif // TRYHLS
 /**
  * Encode a frame twice, once at a high bitrate and once at a low one.
  */
@@ -271,6 +349,10 @@ int main(int argc, char* argv[])
 		printf("Error: could not open output file\n");
 		return 1;
 	}
+
+#ifdef TRYHLS
+    tryhls();
+#endif
 
     // Planeset* inputFrame = 0;
 	// Planeset outputFrame( config.width/NUM_SPLITS, paddedHeight*NUM_SPLITS );
