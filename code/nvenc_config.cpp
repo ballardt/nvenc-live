@@ -39,14 +39,17 @@ void Config::processInput(int argc, char* argv[])
 	this->numTileRows = 1;
 	this->inputFilename = NULL;
 	this->outputFilename = NULL;
+    this->outputAppend = false;
 	this->width = -1;
 	this->height = -1;
 	this->fps = -1;
 	this->tileBitrates = NULL;
 	// Read input
+    static int outputAppend = 0;
 	static struct option long_options[] = {
 		{"input", required_argument, 0, 'i'},
 		{"output", required_argument, 0, 'o'},
+		{"output-append", no_argument, &outputAppend, 1},
 		{"width", required_argument, 0, 'x'},
 		{"height", required_argument, 0, 'y'},
 		{"fps", required_argument, 0, 'f'},
@@ -93,6 +96,9 @@ void Config::processInput(int argc, char* argv[])
 				break;
 		}
 	}
+
+    this->outputAppend = outputAppend;
+
 	// Ensure there are no missing parameters
 	if (this->inputFilename == NULL ||
 		this->outputFilename == NULL ||

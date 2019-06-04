@@ -10,6 +10,7 @@ class Config
 public:
 	char* inputFilename;
 	char* outputFilename;
+    bool  outputAppend;
 	int width;
 	int height;
 	double fps; // TODO

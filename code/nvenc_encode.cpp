@@ -256,7 +256,17 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-	FILE* outFile = fopen(config.outputFilename, "wb");
+	FILE* outFile = 0;
+
+    if( ! config.outputAppend )
+    {
+	    outFile = fopen(config.outputFilename, "wb");
+    }
+    else
+    {
+	    outFile = fopen(config.outputFilename, "a");
+    }
+
 	if (outFile == NULL) {
 		printf("Error: could not open output file\n");
 		return 1;
