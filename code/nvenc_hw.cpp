@@ -51,10 +51,10 @@ void Hardware::initialize()
 	}
 	// Load the codec
 	avcodec_register_all();
-	codecName = "hevc_nvenc";
+	codecName = "h264_nvenc";
 	codec = avcodec_find_encoder_by_name(codecName);
 	if (!codec) {
-		printf("Codec hevc_nvenc not found\n");
+		printf("Codec h264_nvenc not found\n");
 		exit(1);
 	}
 
@@ -91,7 +91,7 @@ AVCodecContext* Hardware::initializeContext(int bitrateValue, int width, int hei
 		printf("Error allocating video codec context\n");
 		exit(1);
 	}
-	// Allocate space for the packet. NVENC will deposit the HEVC bitstream into pkt.
+	// Allocate space for the packet. NVENC will deposit the H264 bitstream into pkt.
 	// To get the video, we just append all of the pkt's together.
 	pkt = av_packet_alloc();
 	if (!pkt) {
