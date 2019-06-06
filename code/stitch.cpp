@@ -21,7 +21,7 @@ typedef boost::dynamic_bitset<Block> Bitset;
 enum NALType {
 	P_SLICE = 0,
 	I_SLICE,
-	VPS,
+	//VPS,
 	SPS,
 	PPS,
 	SEI,
@@ -34,7 +34,7 @@ std::map<int, Bitset> ctuOffsetBits;
 
 /**
  * Given a NAL, get its type.
- * The type is dictated by the first 6 bits after the (3-byte + 1-bit) border.
+ * The type is dictated by the first *5* (h264) bits after the (3-byte + 1-bit + *2-bit*) border.
  * Keep it simple with bitmasks, no need to use Bitsets.
  */
 NALType getNALType(std::vector<Block>& nal)
@@ -48,27 +48,33 @@ NALType getNALType(std::vector<Block>& nal)
 		typeBitsOffset++;
 		i++;
 	}
-	unsigned char typeBits = nal[typeBitsOffset] >> 1;
+	unsigned char typeBits = nal[typeBitsOffset] >> 3;
+	// !!! MUST CHANGE THESE BIT VALUES TO BE ACCURATE !!!
+	// these are the literal values, we need to determine what the hex would be (?)
 	switch (typeBits) {
-		case 0x00:
+		//case 0x00:
 		case 0x01:
 			nalType = P_SLICE;
 			break;
-		case 0x13:
-		case 0x14:
+		//case 0x13:
+		//case 0x14:
+		case 0x05:
 			nalType = I_SLICE;
 			break;
-		case 0x20:
-			nalType = VPS;
-			break;
-		case 0x21:
+		//case 0x20:
+		//	nalType = VPS;
+		//	break;
+		//case 0x21:
+		case 0x07:
 			nalType = SPS;
 			break;
-		case 0x22:
+		//case 0x22:
+		case 0x08:
 			nalType = PPS;
 			break;
-		case 0x27:
-		case 0x28:
+		//case 0x27:
+		//case 0x28:
+		case 0x06:
 			nalType = SEI;
 			break;
 		default:
@@ -376,17 +382,26 @@ void modifySPS(std::vector<Block>* nal, int width, int height) {
 	int oldBitsPos = 0;
 	Bitset oldBits(nal->size()*8);
 	Bitset newBits(0);
+	int mbWidthMinus1 = (width / 16) - 1;
+	int mbHeightMinus1 = (height/ 16) - 1;
 	// Convert the NAL to some bits
 	nalToBitset(&oldBits, nal);
 	// Navigate to the right spot
-	oldBitsPos += copyBits(&oldBits, &newBits, oldBitsPos, 132);
+	//oldBitsPos += copyBits(&oldBits, &newBits, oldBitsPos, 132);
+	//oldBitsPos += copyExpGolomb(&oldBits, &newBits, oldBitsPos);
+	//oldBitsPos += copyExpGolomb(&oldBits, &newBits, oldBitsPos);
+	oldBitsPos += copyBits(&oldBits, &newBits, oldBitsPos, 23);
+	oldBitsPos += copyExpGolomb(&oldBits, &newBits, oldBitsPos);
+	// assuming for now that the profile_idc if statements is false, as well as other ifs
 	oldBitsPos += copyExpGolomb(&oldBits, &newBits, oldBitsPos);
 	oldBitsPos += copyExpGolomb(&oldBits, &newBits, oldBitsPos);
+	oldBitsPos += copyExpGolomb(&oldBits, &newBits, oldBitsPos);
+	oldBitsPos += copyBits(&oldBits, &newBits, oldBitsPos, 1);
 	// Consume old values for width/height, insert new ones
 	oldBitsPos += copyExpGolomb(&oldBits, NULL, oldBitsPos);
 	oldBitsPos += copyExpGolomb(&oldBits, NULL, oldBitsPos);
-	writeUnsExpGolomb(&newBits, width);
-	writeUnsExpGolomb(&newBits, height);
+	writeUnsExpGolomb(&newBits, mbWidthMinus1);
+	writeUnsExpGolomb(&newBits, mbHeightMinus1);
 	// Finalize
 	doneEditingNAL(nal, &newBits, &oldBits, oldBitsPos, true, false);
 }
@@ -512,39 +527,39 @@ int doStitching( unsigned char* tiledBitstream,
         group->clearBitstreamPos( );
     }
 	std::vector<Block> nal;
-	vector<int> oldCtuOffsetBitSizes(contextGroups.size());
-	for (int i=0; i<contextGroups.size(); i++) {
-		oldCtuOffsetBitSizes[i] = ceil(log2((contextGroups[i]->getWidth()/CTU_SIZE)
-										   *(contextGroups[i]->getHeight()/CTU_SIZE)));
-	}
-	const int newCtuOffsetBitSize = ceil(log2((finalWidth/CTU_SIZE)*(finalHeight/CTU_SIZE)));
-	int numTiles = numTileRows * numTileCols;
-	int imgCtuWidth = finalWidth / CTU_SIZE;
-	int tileCtuHeight = (finalHeight / CTU_SIZE) / numTileRows;
-	int tileCtuWidth = imgCtuWidth / numTileCols;
+	//vector<int> oldCtuOffsetBitSizes(contextGroups.size());
+	//for (int i=0; i<contextGroups.size(); i++) {
+	//	oldCtuOffsetBitSizes[i] = ceil(log2((contextGroups[i]->getWidth()/CTU_SIZE)
+	//									   *(contextGroups[i]->getHeight()/CTU_SIZE)));
+	//}
+	//const int newCtuOffsetBitSize = ceil(log2((finalWidth/CTU_SIZE)*(finalHeight/CTU_SIZE)));
+	//int numTiles = numTileRows * numTileCols;
+	//int imgCtuWidth = finalWidth / CTU_SIZE;
+	//int tileCtuHeight = (finalHeight / CTU_SIZE) / numTileRows;
+	//int tileCtuWidth = imgCtuWidth / numTileCols;
 	int tileIdx;
-	vector<int> sliceSegAddrs(numTiles);
-	for (int col=0; col<numTileCols; col++) {
-		for (int row=0; row<numTileRows; row++) {
-			tileIdx = (numTileRows * col) + row;
-			sliceSegAddrs[tileIdx] = (row * imgCtuWidth * tileCtuHeight) + (col * tileCtuWidth);
-		}
-	}
-	for (int i=0; i<numTiles; i++) {
-		ctuOffsetBits.insert({sliceSegAddrs[i], Bitset(newCtuOffsetBitSize, sliceSegAddrs[i])});
-	}
+	//vector<int> sliceSegAddrs(numTiles);
+	//for (int col=0; col<numTileCols; col++) {
+	//	for (int row=0; row<numTileRows; row++) {
+	//		tileIdx = (numTileRows * col) + row;
+	//		sliceSegAddrs[tileIdx] = (row * imgCtuWidth * tileCtuHeight) + (col * tileCtuWidth);
+	//	}
+	//}
+	//for (int i=0; i<numTiles; i++) {
+	//	ctuOffsetBits.insert({sliceSegAddrs[i], Bitset(newCtuOffsetBitSize, sliceSegAddrs[i])});
+	//}
 	tileIdx = 0;
 	int  nalType;
 	int  bitrateIdx = -1;
 	bool printSEI = false;
-	int  baseTileIdx = 0;
+	//int  baseTileIdx = 0;
 	for (int contextGroupIdx=0; contextGroupIdx<contextGroups.size(); contextGroupIdx++)
 	{
 		nalType = INITIALIZE_NALTYPE;
-		if (contextGroupIdx > 0)
-		{
-			baseTileIdx += contextGroups[contextGroupIdx-1]->numTileCols * numTileRows;
-		}
+		//if (contextGroupIdx > 0)
+		//{
+		//	baseTileIdx += contextGroups[contextGroupIdx-1]->numTileCols * numTileRows;
+		//}
 		while (nalType != END_OF_STREAM)
 		{
 			for (int bitrateIdx=0; bitrateIdx<numQualityLevels; bitrateIdx++)
@@ -555,10 +570,10 @@ int doStitching( unsigned char* tiledBitstream,
 					case P_SLICE:
 						if (tileBitrates[tileIdx] == bitrateIdx)
 						{
-							modifyPSlice(&nal, (tileIdx==0), (tileIdx==baseTileIdx),
-											sliceSegAddrs[tileIdx],
-											oldCtuOffsetBitSizes[contextGroupIdx],
-											newCtuOffsetBitSize);
+							//modifyPSlice(&nal, (tileIdx==0), (tileIdx==baseTileIdx),
+							//				sliceSegAddrs[tileIdx],
+							//				oldCtuOffsetBitSizes[contextGroupIdx],
+							//				newCtuOffsetBitSize);
 							std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
 							totalSize += nal.size();
 						}
@@ -570,10 +585,10 @@ int doStitching( unsigned char* tiledBitstream,
 					case I_SLICE:
 						if (tileBitrates[tileIdx] == bitrateIdx)
 						{
-							modifyISlice(&nal, (tileIdx==0), (tileIdx==baseTileIdx),
-											sliceSegAddrs[tileIdx],
-											oldCtuOffsetBitSizes[contextGroupIdx],
-											newCtuOffsetBitSize);
+							//modifyISlice(&nal, (tileIdx==0), (tileIdx==baseTileIdx),
+							//				sliceSegAddrs[tileIdx],
+							//				oldCtuOffsetBitSizes[contextGroupIdx],
+							//				newCtuOffsetBitSize);
 							std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
 							totalSize += nal.size();
 						}
@@ -593,19 +608,19 @@ int doStitching( unsigned char* tiledBitstream,
 					case PPS:
 						if (bitrateIdx == 0 && contextGroupIdx == 0)
 						{
-							modifyPPS(&nal, numTileCols, numTileRows);
+							//modifyPPS(&nal, numTileCols, numTileRows);
 							std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
 							totalSize += nal.size();
 							printSEI = true;
 						}
 						break;
-					case VPS:
-						if (bitrateIdx == 0 && contextGroupIdx == 0)
-						{
-							std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
-							totalSize += nal.size();
-						}
-						break;
+					//case VPS:
+					//	if (bitrateIdx == 0 && contextGroupIdx == 0)
+					//	{
+					//		std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
+					//		totalSize += nal.size();
+					//	}
+					//	break;
 					case SEI:
 						if (printSEI)
 						{
