@@ -48,9 +48,9 @@ NALType getNALType(std::vector<Block>& nal)
 		typeBitsOffset++;
 		i++;
 	}
-	unsigned char typeBits = nal[typeBitsOffset] >> 3;
-	// !!! MUST CHANGE THESE BIT VALUES TO BE ACCURATE !!!
-	// these are the literal values, we need to determine what the hex would be (?)
+	unsigned char typeBits = nal[typeBitsOffset] << 3;
+	typeBits >>= 3;
+	printf("%02X ", typeBits);
 	switch (typeBits) {
 		//case 0x00:
 		case 0x01:
@@ -166,6 +166,7 @@ int copyExpGolomb(Bitset* oldBits, Bitset* newBits, int oldBitsPos) {
 	bool curr = (*oldBits)[oldBitsPos];
 	while (curr == false) {
 		if (newBits != NULL) {
+			printf(((*oldBits)[oldBitsPos+numZeros]) ? "1" : "0");
 			newBits->push_back((*oldBits)[oldBitsPos+numZeros]);
 		}
 		numZeros++;
@@ -173,9 +174,11 @@ int copyExpGolomb(Bitset* oldBits, Bitset* newBits, int oldBitsPos) {
 	}
 	if (newBits != NULL) {
 		for (int i=0; i<numZeros+1; i++) {
+			printf(((*oldBits)[oldBitsPos+numZeros]) ? "1" : "0");
 			newBits->push_back((*oldBits)[oldBitsPos+numZeros+i]);
 		}
 	}
+	printf("\n");
 	return (numZeros*2)+1;
 }
 
@@ -384,15 +387,13 @@ void modifySPS(std::vector<Block>* nal, int width, int height) {
 	Bitset newBits(0);
 	int mbWidthMinus1 = (width / 16) - 1;
 	int mbHeightMinus1 = (height/ 16) - 1;
+	printf("%d\n", mbHeightMinus1);
 	// Convert the NAL to some bits
 	nalToBitset(&oldBits, nal);
 	// Navigate to the right spot
-	//oldBitsPos += copyBits(&oldBits, &newBits, oldBitsPos, 132);
-	//oldBitsPos += copyExpGolomb(&oldBits, &newBits, oldBitsPos);
-	//oldBitsPos += copyExpGolomb(&oldBits, &newBits, oldBitsPos);
-	oldBitsPos += copyBits(&oldBits, &newBits, oldBitsPos, 23);
+	oldBitsPos += copyBits(&oldBits, &newBits, oldBitsPos, 40);
+	oldBitsPos += copyBits(&oldBits, &newBits, oldBitsPos, 24);
 	oldBitsPos += copyExpGolomb(&oldBits, &newBits, oldBitsPos);
-	// assuming for now that the profile_idc if statements is false, as well as other ifs
 	oldBitsPos += copyExpGolomb(&oldBits, &newBits, oldBitsPos);
 	oldBitsPos += copyExpGolomb(&oldBits, &newBits, oldBitsPos);
 	oldBitsPos += copyExpGolomb(&oldBits, &newBits, oldBitsPos);
@@ -403,7 +404,8 @@ void modifySPS(std::vector<Block>* nal, int width, int height) {
 	writeUnsExpGolomb(&newBits, mbWidthMinus1);
 	writeUnsExpGolomb(&newBits, mbHeightMinus1);
 	// Finalize
-	doneEditingNAL(nal, &newBits, &oldBits, oldBitsPos, true, false);
+	//doneEditingNAL(nal, &newBits, &oldBits, oldBitsPos, true, false);
+	doneEditingNAL(nal, &newBits, &oldBits, oldBitsPos, true, true);
 }
 
 // Enable tiles and insert the tile-related fields
@@ -415,10 +417,10 @@ void modifyPPS(std::vector<Block>* nal, int numTileCols, int numTileRows) {
 	// Convert the NAL to some bits
 	nalToBitset(&oldBits, nal);
 	// Navigate to the right spot
-	oldBitsPos += copyBits(&oldBits, &newBits, oldBitsPos, 40);
+	oldBitsPos += copyBits(&oldBits, &newBits, oldBitsPos, 32);
 	oldBitsPos += copyExpGolomb(&oldBits, &newBits, oldBitsPos);
 	oldBitsPos += copyExpGolomb(&oldBits, &newBits, oldBitsPos);
-	oldBitsPos += copyBits(&oldBits, &newBits, oldBitsPos, 7);
+	oldBitsPos += copyBits(&oldBits, &newBits, oldBitsPos, 2);
 	oldBitsPos += copyExpGolomb(&oldBits, &newBits, oldBitsPos);
 	oldBitsPos += copyExpGolomb(&oldBits, &newBits, oldBitsPos);
 	oldBitsPos += copyExpGolomb(&oldBits, &newBits, oldBitsPos);
@@ -426,18 +428,12 @@ void modifyPPS(std::vector<Block>* nal, int numTileCols, int numTileRows) {
 	oldBitsPos += copyExpGolomb(&oldBits, &newBits, oldBitsPos);
 	oldBitsPos += copyExpGolomb(&oldBits, &newBits, oldBitsPos);
 	oldBitsPos += copyExpGolomb(&oldBits, &newBits, oldBitsPos);
-	oldBitsPos += copyBits(&oldBits, &newBits, oldBitsPos, 4);
-	// Replace tiles_enabled_flag
+	oldBitsPos += copyBits(&oldBits, &newBits, oldBitsPos, 1);
+	// Set constrained_intra_pred_flag
 	oldBitsPos += 1;
 	newBits.push_back(1);
-	oldBitsPos += copyBits(&oldBits, &newBits, oldBitsPos, 1);
-	// Insert tile info (num tile cols, num tile rows, 2 flags)
-	writeUnsExpGolomb(&newBits, numTileCols-1);
-	writeUnsExpGolomb(&newBits, numTileRows-1);
-	newBits.push_back(1);
-	newBits.push_back(1); // CHANGED
 	// Finalize
-	doneEditingNAL(nal, &newBits, &oldBits, oldBitsPos, true, false);
+	doneEditingNAL(nal, &newBits, &oldBits, oldBitsPos, false, false);
 }
 
 void writeCtuOffset(Bitset* bits, unsigned int ctuOffset, int ctuOffsetBitSize) {
@@ -447,6 +443,7 @@ void writeCtuOffset(Bitset* bits, unsigned int ctuOffset, int ctuOffsetBitSize) 
 }
 
 // Set segmentAddress, slice_loop_filter_across_..., num_entrypoint_offsets
+// *** MUST CHANGE LATER **** ctuOffset now corresponds to first_mb_in_slice
 void modifyISlice(std::vector<Block>* nal, bool isFirstSlice, bool wasFirstSlice, int ctuOffset,
 				   int oldCtuOffsetBitSize, int newCtuOffsetBitSize) {
 	int oldBitsPos = 0;
@@ -454,26 +451,17 @@ void modifyISlice(std::vector<Block>* nal, bool isFirstSlice, bool wasFirstSlice
 	Bitset newBits(0);
 	// Convert the NAL to some bits
 	nalToBitset(&oldBits, nal);
-	// Navigate to the right spot and make our changes
-	oldBitsPos += copyBits(&oldBits, &newBits, oldBitsPos, 40);
-	oldBitsPos += 1;
-	newBits.push_back((int)isFirstSlice);
-	oldBitsPos += copyBits(&oldBits, &newBits, oldBitsPos, 1);
-	oldBitsPos += copyExpGolomb(&oldBits, &newBits, oldBitsPos);
-	if (!isFirstSlice) {
-		if (!wasFirstSlice) {
-			oldBitsPos += oldCtuOffsetBitSize;
-		}
-		writeCtuOffset(&newBits, ctuOffset, newCtuOffsetBitSize);
+	printf("I slice:\n");
+	for (int i=0; i<100; i++) {
+		printf((oldBits[oldBitsPos+i]) ? "1" : "0");
 	}
-	oldBitsPos += copyExpGolomb(&oldBits, &newBits, oldBitsPos);
-	oldBitsPos += copyBits(&oldBits, &newBits, oldBitsPos, 2);
-	oldBitsPos += copyExpGolomb(&oldBits, &newBits, oldBitsPos);
-	oldBitsPos += 1;
-	newBits.push_back(1); // CHANGED
-	newBits.push_back(1);
+	printf("\n%d\n", ctuOffset);
+	// Navigate to the right spot and make our changes
+	oldBitsPos += copyBits(&oldBits, &newBits, oldBitsPos, 32);
+	oldBitsPos += copyExpGolomb(&oldBits, NULL, oldBitsPos);
+	writeUnsExpGolomb(&newBits, ctuOffset);
 	// Finalize
-	doneEditingNAL(nal, &newBits, &oldBits, oldBitsPos, false, true);
+	doneEditingNAL(nal, &newBits, &oldBits, oldBitsPos, false, false);
 }
 
 // Set segmentAddress, slice_loop_filter_across_..., num_entrypoint_offsets
@@ -484,26 +472,17 @@ void modifyPSlice(std::vector<Block>* nal, bool isFirstSlice, bool wasFirstSlice
 	Bitset newBits(0);
 	// Convert the NAL to some bits
 	nalToBitset(&oldBits, nal);
-	// Navigate to the right spot and make our changes
-	oldBitsPos += copyBits(&oldBits, &newBits, oldBitsPos, 40);
-	oldBitsPos += 1;
-	newBits.push_back((int)isFirstSlice);	
-	oldBitsPos += copyExpGolomb(&oldBits, &newBits, oldBitsPos);
-	if (!isFirstSlice) {
-		if (!wasFirstSlice) {
-			oldBitsPos += oldCtuOffsetBitSize;
-		}
-		writeCtuOffset(&newBits, ctuOffset, newCtuOffsetBitSize);
+	printf("P slice:\n");
+	for (int i=0; i<100; i++) {
+		printf((oldBits[i]) ? "1" : "0");
 	}
-	oldBitsPos += copyExpGolomb(&oldBits, &newBits, oldBitsPos);
-	oldBitsPos += copyBits(&oldBits, &newBits, oldBitsPos, 13);
-	oldBitsPos += copyExpGolomb(&oldBits, &newBits, oldBitsPos);
-	oldBitsPos += copyExpGolomb(&oldBits, &newBits, oldBitsPos);
-	oldBitsPos += 1;
-	newBits.push_back(1); // CHANGED
-	newBits.push_back(1);
+	printf("\n\n");
+	// Navigate to the right spot and make our changes
+	oldBitsPos += copyBits(&oldBits, &newBits, oldBitsPos, 32);
+	oldBitsPos += copyExpGolomb(&oldBits, NULL, oldBitsPos);
+	writeUnsExpGolomb(&newBits, ctuOffset);
 	// Finalize
-	doneEditingNAL(nal, &newBits, &oldBits, oldBitsPos, false, true);
+	doneEditingNAL(nal, &newBits, &oldBits, oldBitsPos, false, false);
 }
 
 int doStitching( unsigned char* tiledBitstream,
@@ -533,7 +512,7 @@ int doStitching( unsigned char* tiledBitstream,
 	//									   *(contextGroups[i]->getHeight()/CTU_SIZE)));
 	//}
 	//const int newCtuOffsetBitSize = ceil(log2((finalWidth/CTU_SIZE)*(finalHeight/CTU_SIZE)));
-	//int numTiles = numTileRows * numTileCols;
+	int numTiles = numTileRows * numTileCols;
 	//int imgCtuWidth = finalWidth / CTU_SIZE;
 	//int tileCtuHeight = (finalHeight / CTU_SIZE) / numTileRows;
 	//int tileCtuWidth = imgCtuWidth / numTileCols;
@@ -553,6 +532,8 @@ int doStitching( unsigned char* tiledBitstream,
 	int  bitrateIdx = -1;
 	bool printSEI = false;
 	//int  baseTileIdx = 0;
+	int numMbsInSlice = (finalWidth * finalHeight) / (numTiles * 16 * 16); // mb = macroblock
+	int firstMb;
 	for (int contextGroupIdx=0; contextGroupIdx<contextGroups.size(); contextGroupIdx++)
 	{
 		nalType = INITIALIZE_NALTYPE;
@@ -564,16 +545,17 @@ int doStitching( unsigned char* tiledBitstream,
 		{
 			for (int bitrateIdx=0; bitrateIdx<numQualityLevels; bitrateIdx++)
 			{
+				firstMb = (numMbsInSlice * tileIdx); //(tileIdx + numTiles * contextGroupIdx);
 				nalType = getNextNAL( contextGroups[contextGroupIdx], (Bitrate)bitrateIdx, &nal );
 				switch (nalType)
 				{
 					case P_SLICE:
 						if (tileBitrates[tileIdx] == bitrateIdx)
 						{
-							//modifyPSlice(&nal, (tileIdx==0), (tileIdx==baseTileIdx),
-							//				sliceSegAddrs[tileIdx],
-							//				oldCtuOffsetBitSizes[contextGroupIdx],
-							//				newCtuOffsetBitSize);
+							modifyPSlice(&nal, false, false,
+											firstMb,
+											0,
+											0);
 							std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
 							totalSize += nal.size();
 						}
@@ -585,10 +567,10 @@ int doStitching( unsigned char* tiledBitstream,
 					case I_SLICE:
 						if (tileBitrates[tileIdx] == bitrateIdx)
 						{
-							//modifyISlice(&nal, (tileIdx==0), (tileIdx==baseTileIdx),
-							//				sliceSegAddrs[tileIdx],
-							//				oldCtuOffsetBitSizes[contextGroupIdx],
-							//				newCtuOffsetBitSize);
+							modifyISlice(&nal, false, false,
+											firstMb,
+										    0,
+											0);
 							std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
 							totalSize += nal.size();
 						}
@@ -608,7 +590,7 @@ int doStitching( unsigned char* tiledBitstream,
 					case PPS:
 						if (bitrateIdx == 0 && contextGroupIdx == 0)
 						{
-							//modifyPPS(&nal, numTileCols, numTileRows);
+							modifyPPS(&nal, numTileCols, numTileRows);
 							std::copy(nal.begin(), nal.end(), tiledBitstream+totalSize);
 							totalSize += nal.size();
 							printSEI = true;

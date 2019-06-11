@@ -29,9 +29,11 @@ extern "C"
 
 #define NUM_SPLITS (config.numTileCols)
 #define BITSTREAM_SIZE 200000 // Increase if necessary; the program will let you know
-#define MAX_Y_HEIGHT 8192 // Hardware limitation
+#define MAX_Y_HEIGHT 4096 // Hardware limitation
 
 using namespace std;
+
+int CG_DEPTH = 1;
 
 static int hardwareInitialized = 0;
 
@@ -64,6 +66,7 @@ int sendFrameToNVENC(Bitrate bitrate, int contextGroupIdx)
 	}
 
 	// Try to receive packets until there are none
+	printf("About to receive packets!\n");
 	while (ret >= 0) {
 		ret = avcodec_receive_packet(
                     config.contextGroups[contextGroupIdx]->getContext(bitrate),
@@ -78,7 +81,8 @@ int sendFrameToNVENC(Bitrate bitrate, int contextGroupIdx)
 			}
 			//bsPos += pktSize;
 #if 1
-			dbg_file = fopen( "writeme.hevc", "ab" );
+			printf("Writing to dbg_file...\n");
+			dbg_file = fopen( "writeme.h264", "ab" );
 			fwrite(hw.pkt->data, 1, hw.pkt->size, dbg_file);
 			fclose(dbg_file);
 #endif
@@ -97,7 +101,7 @@ int sendFrameToNVENC(Bitrate bitrate, int contextGroupIdx)
 		    memcpy(bitstream+bsPos, hw.pkt->data, hw.pkt->size);
 		    bsPos += hw.pkt->size;
 #if 1
-		    dbg_file = fopen( "writeme.hevc", "ab" );
+		    dbg_file = fopen( "writeme.h264", "ab" );
 		    fwrite(hw.pkt->data, 1, hw.pkt->size, dbg_file);
 		    fclose(dbg_file);
 #endif
@@ -194,7 +198,7 @@ int main(int argc, char* argv[])
 	int paddedHeight = config.height;
 	// TODO remove? since we crop first, then separate the context groups
 #if 0
-	while( config.numTileCols * paddedHeight > 8192 )
+	while( config.numTileCols * paddedHeight > MAX_Y_HEIGHT)
 	{
 		paddedHeight -= 1;
 	}
@@ -286,8 +290,8 @@ int main(int argc, char* argv[])
 		tiledBitstreamSize = doStitching(tiledBitstream,
                                          2,
                                          config.tileBitrates,
-										 config.width,
-                                         paddedHeight,
+										 config.width/NUM_SPLITS,
+										 paddedHeight*NUM_SPLITS,
                                          config.numTileRows,
 										 config.numTileCols,
 										 config.contextGroups);
