@@ -34,6 +34,7 @@ extern "C"
 using namespace std;
 
 int CG_DEPTH = 1;
+int CG_LOCK  = 0;
 
 static int hardwareInitialized = 0;
 
