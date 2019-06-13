@@ -127,6 +127,7 @@ AVCodecContext* Hardware::initializeContext(int bitrateValue, int width, int hei
 	//c->gop_size = state->encoder_control->cfg.gop_len; // TODO this comes up as only 4?
 	// c->gop_size = 16;
 	c->gop_size = 25;
+    c->forceidr = 1;  // trying to get a closed gop every 25 frames (1sec)
 	c->pix_fmt = AV_PIX_FMT_YUV420P;
 	// Whether high or low bitrate
 	c->bit_rate = bitrateValue;
