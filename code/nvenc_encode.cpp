@@ -274,7 +274,18 @@ int main(int argc, char* argv[])
 	for (int i=0; i<numContextGroups; i++) {
         config.contextGroups[i]->setBufferSize( BITSTREAM_SIZE );
 	}
-	tiledBitstream = (unsigned char*)malloc(sizeof(unsigned char) * BITSTREAM_SIZE);
+	//tiledBitstream = (unsigned char*)malloc(sizeof(unsigned char) * BITSTREAM_SIZE);
+	char buffer[50];
+	//FILE* outFiles[numContextGroups * 2];
+	FILE* outFiles[numContextGroups][2];
+	for( int i=0; i<numContextGroups; i++ ) {
+		sprintf(buffer, "cg%d_q%d.h264", i, 0);
+		//outFiles[(2*i)] = 
+		outFiles[i][0] = fopen(buffer, "wb");
+		sprintf(buffer, "cg%d_q%d.h264", i, 1);
+		//outFiles[(2*i)+1] = 
+		outFiles[i][1] = fopen(buffer, "wb");
+	}
 
 	// The main loop. Get a frame, rearrange it, send it to NVENC, stitch it, then write it out.
 	while( outputFrame = fr->getNextFrame(ySize) )
@@ -288,7 +299,7 @@ int main(int argc, char* argv[])
                      outputFrame->v,
                      config.width/NUM_SPLITS,
                      paddedHeight*NUM_SPLITS );
-		tiledBitstreamSize = doStitching(tiledBitstream,
+		/*tiledBitstreamSize = doStitching(tiledBitstream,
                                          2,
                                          config.tileBitrates,
 										 config.width/NUM_SPLITS,
@@ -297,6 +308,11 @@ int main(int argc, char* argv[])
 										 config.numTileCols,
 										 config.contextGroups);
 		fwrite(tiledBitstream, sizeof(unsigned char), tiledBitstreamSize, outFile);
+		*/
+		for (int i=0; i<numContextGroups; i++) {
+			fwrite(config.contextGroups[i]->getBitstream(HIGH_BITRATE), sizeof(unsigned char), config.contextGroups[i]->getBitstreamSize(HIGH_BITRATE), outFiles[i][0]);
+			fwrite(config.contextGroups[i]->getBitstream(LOW_BITRATE), sizeof(unsigned char), config.contextGroups[i]->getBitstreamSize(LOW_BITRATE), outFiles[i][1]);
+		}
 		// config.height = origHeight;
 	}
 
