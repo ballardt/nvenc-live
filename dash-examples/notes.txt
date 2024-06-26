@@ -1,0 +1,11 @@
+@timeShiftBufferDepth
+[optional]
+specifies the duration of the smallest time shifting buffer for any Representation in the MPD that is guaranteed to be available for a Media Presentation with type 'dynamic'. When not present, the value is infinite. This value of the attribute is undefined if the type attribute is equal to ‘static’.
+
+minimumUpdatePeriod
+examples: PT5M, P100Y
+If a template is valid for a long time, there is no reason at all to update the MPD file.
+Just make sure that new content is generated at the expected frequency, and the client should be happy.
+The base timestamp must be correct in this case!
+
+

@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<MPD xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns="urn:mpeg:dash:schema:mpd:2011"
+	xmlns:xlink="http://www.w3.org/1999/xlink"
+	xsi:schemaLocation="urn:mpeg:DASH:schema:MPD:2011 http://standards.iso.org/ittf/PubliclyAvailableStandards/MPEG-DASH_schema_files/DASH-MPD.xsd"
+	profiles="urn:mpeg:dash:profile:isoff-live:2011"
+	type="dynamic"
+	minimumUpdatePeriod="PT2S"
+	suggestedPresentationDelay="PT2S"
+	availabilityStartTime="2019-10-14T15:50:29Z"
+	publishTime="2019-10-14T15:58:38Z"
+	minBufferTime="PT4.0S">
+	<ProgramInformation>
+		<Title>RTSP server</Title>
+	</ProgramInformation>
+	<Period id="0" start="PT0.0S">
+		<AdaptationSet id="0" contentType="video" segmentAlignment="true" bitstreamSwitching="true">
+			<Representation id="0" mimeType="video/mp4" codecs="avc1.4d4028" bandwidth="1038489" width="2816" height="704" frameRate="30000/1001">
+				<SegmentTemplate timescale="30000" initialization="init-stream$RepresentationID$.m4s" media="chunk-stream$RepresentationID$-$Number%05d$.m4s" startNumber="1">
+					<SegmentTimeline>
+						<S t="0" d="60060" r="246" />
+					</SegmentTimeline>
+				</SegmentTemplate>
+			</Representation>
+		</AdaptationSet>
+		<AdaptationSet id="1" contentType="video" segmentAlignment="true" bitstreamSwitching="true">
+			<Representation id="1" mimeType="video/mp4" codecs="avc1.4d4028" bandwidth="4038489" width="2816" height="704" frameRate="30000/1001">
+				<SegmentTemplate timescale="30000" initialization="init-stream$RepresentationID$.m4s" media="chunk-stream$RepresentationID$-$Number%05d$.m4s" startNumber="1">
+					<SegmentTimeline>
+						<S t="0" d="60060" r="245" />
+					</SegmentTimeline>
+				</SegmentTemplate>
+			</Representation>
+		</AdaptationSet>
+		<AdaptationSet id="2" contentType="video" segmentAlignment="true" bitstreamSwitching="true">
+			<Representation id="2" mimeType="video/mp4" codecs="avc1.4d4028" bandwidth="6038489" width="2816" height="704" frameRate="30000/1001">
+				<SegmentTemplate timescale="30000" initialization="init-stream$RepresentationID$.m4s" media="chunk-stream$RepresentationID$-$Number%05d$.m4s" startNumber="1">
+					<SegmentTimeline>
+						<S t="0" d="60060" r="245" />
+					</SegmentTimeline>
+				</SegmentTemplate>
+			</Representation>
+		</AdaptationSet>
+		<AdaptationSet id="3" contentType="video" segmentAlignment="true" bitstreamSwitching="true">
+			<Representation id="3" mimeType="video/mp4" codecs="avc1.4d4028" bandwidth="8038489" width="2816" height="704" frameRate="30000/1001">
+				<SegmentTemplate timescale="30000" initialization="init-stream$RepresentationID$.m4s" media="chunk-stream$RepresentationID$-$Number%05d$.m4s" startNumber="1">
+					<SegmentTimeline>
+						<S t="0" d="60060" r="245" />
+					</SegmentTimeline>
+				</SegmentTemplate>
+			</Representation>
+		</AdaptationSet>
+	</Period>
+</MPD>
